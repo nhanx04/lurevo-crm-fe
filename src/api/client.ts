@@ -48,7 +48,13 @@ api.interceptors.response.use(
   async (error: AxiosError<ApiEnvelope<unknown>>) => {
     const status = error.response?.status ?? 0;
     const original = error.config as RetryConfig | undefined;
-    const body = error.response?.data && 'success' in error.response.data && !error.response.data.success ? error.response.data.error : undefined;
+    const payload = error.response?.data;
+    const body =
+      payload && typeof payload === 'object' && 'success' in payload && !payload.success
+        ? payload.error
+        : typeof payload === 'string'
+          ? { code: 'REQUEST_FAILED', message: payload }
+          : undefined;
 
     if (status === 401 && original && !original._retry && !original.skipAuthRefresh) {
       const session = authStorage.get();

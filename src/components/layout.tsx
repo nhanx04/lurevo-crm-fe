@@ -26,6 +26,9 @@ const SIDEBAR_COLLAPSED_WIDTH = 72;
 const routeMeta = [
   { match: /^\/app\/dashboard$/, title: "Dashboard" },
   { match: /^\/app\/analytics$/, title: "Analytics" },
+  { match: /^\/app\/orders\/new$/, title: "Create Order" },
+  { match: /^\/app\/orders\/[^/]+\/edit$/, title: "Order Details" },
+  { match: /^\/app\/orders\/[^/]+$/, title: "Order Details" },
   { match: /^\/app\/orders$/, title: "Orders" },
   { match: /^\/app\/listings\/new$/, title: "Create Listing" },
   { match: /^\/app\/listings\/[^/]+\/edit$/, title: "Edit Listing" },
@@ -33,6 +36,7 @@ const routeMeta = [
   { match: /^\/app\/listings$/, title: "Listings" },
   { match: /^\/app\/categories$/, title: "Categories" },
   { match: /^\/app\/listing-statuses$/, title: "Listing Statuses" },
+  { match: /^\/app\/shops$/, title: "Etsy Shops" },
   { match: /^\/app\/collaborators$/, title: "Collaborators" },
   { match: /^\/app\/account\/change-password$/, title: "Change Password" },
   { match: /^\/app\/account$/, title: "Account Settings" },
@@ -67,6 +71,7 @@ const navigationGroups = [
     items: [
       { to: "/app/categories", label: "Categories", icon: HiOutlineFolder },
       { to: "/app/listing-statuses", label: "Statuses", icon: HiOutlineTag },
+      { to: "/app/shops", label: "Etsy Shops", icon: HiOutlineShoppingBag },
       {
         to: "/app/collaborators",
         label: "Collaborators",

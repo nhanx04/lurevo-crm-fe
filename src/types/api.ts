@@ -170,7 +170,32 @@ export type ListingRequest = {
   published_at?: string | null;
 };
 
-export type ShopSummary = { id: string; name: string; platform: string };
+export type Shop = {
+  id: string;
+  name: string;
+  platform: string;
+  external_shop_id?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ShopSummary = {
+  id: string;
+  name: string;
+  platform: string;
+  external_shop_id?: string | null;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type ShopRequest = {
+  name?: string;
+  platform?: string;
+  external_shop_id?: string | null;
+  is_active?: boolean;
+};
 
 export type OrderReadiness = {
   ready: boolean;
@@ -182,6 +207,8 @@ export type OrderReadiness = {
 export type OrderItemFile = {
   id: string;
   file_id: string;
+  storage_key?: string;
+  url?: string;
   file_type: string;
   usage?: string | null;
   position?: string | null;
@@ -226,6 +253,8 @@ export type OrderLine = {
 export type ShippingLabel = {
   id: string;
   file_id: string;
+  storage_key?: string;
+  url?: string;
   version: number;
   status: string;
   is_active: boolean;
@@ -234,6 +263,18 @@ export type ShippingLabel = {
   size: number;
   uploaded_at: string;
   replaced_at?: string | null;
+  uploaded_by?: { id: string; full_name: string } | null;
+};
+
+export type OrderActivity = {
+  id: string;
+  order_id: string;
+  order_item_id?: string | null;
+  actor?: { id: string; full_name: string } | null;
+  activity_type: string;
+  message: string;
+  metadata?: Record<string, unknown> | null;
+  created_at: string;
 };
 
 export type Order = {
@@ -245,9 +286,12 @@ export type Order = {
   customer_note?: string | null;
   ordered_at?: string | null;
   created_by: { id: string; full_name: string };
+  reviewed_by?: { id: string; full_name: string } | null;
+  reviewed_at?: string | null;
   supplier: {
     order_id?: string | null;
     status?: string | null;
+    source?: string | null;
     tracking_number?: string | null;
     total_items?: number | null;
     total_quantity?: number | null;
@@ -267,6 +311,9 @@ export type Order = {
   readiness?: OrderReadiness;
   lines?: OrderLine[];
   shipping_labels?: ShippingLabel[];
+  active_shipping_label?: ShippingLabel | null;
+  activities?: OrderActivity[];
+  submitted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
