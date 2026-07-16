@@ -1,119 +1,321 @@
-import { ReactNode, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { ReactNode, useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
-  HiOutlineArrowRightOnRectangle,
+  HiOutlineArrowLeftOnRectangle,
   HiOutlineBars3,
+  HiOutlineChartBarSquare,
+  HiOutlineChevronDown,
   HiOutlineCog6Tooth,
   HiOutlineFolder,
   HiOutlineRectangleStack,
+  HiOutlineShoppingBag,
   HiOutlineSquares2X2,
   HiOutlineTag,
   HiOutlineUsers,
   HiOutlineXMark,
-} from 'react-icons/hi2';
-import clsx from 'clsx';
-import { useAuth } from '@/features/auth/AuthProvider';
-import { initials } from '@/utils/format';
-import { Badge, Button } from './ui';
+} from "react-icons/hi2";
+import clsx from "clsx";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { initials } from "@/utils/format";
+import { Badge, Button } from "./ui";
 
-const navItems = [
-  { to: '/app/dashboard', label: 'Dashboard', icon: HiOutlineSquares2X2 },
-  { to: '/app/listings', label: 'Listings', icon: HiOutlineRectangleStack },
-  { to: '/app/categories', label: 'Categories', icon: HiOutlineFolder },
-  { to: '/app/listing-statuses', label: 'Listing Statuses', icon: HiOutlineTag },
-  { to: '/app/collaborators', label: 'Collaborators', icon: HiOutlineUsers, ownerOnly: true },
-  { to: '/app/account', label: 'Account Settings', icon: HiOutlineCog6Tooth },
+const SIDEBAR_KEY = "lurevo.sidebar.collapsed";
+const SIDEBAR_WIDTH = 252;
+const SIDEBAR_COLLAPSED_WIDTH = 72;
+
+const routeMeta = [
+  { match: /^\/app\/dashboard$/, title: "Dashboard" },
+  { match: /^\/app\/analytics$/, title: "Analytics" },
+  { match: /^\/app\/orders$/, title: "Orders" },
+  { match: /^\/app\/listings\/new$/, title: "Create Listing" },
+  { match: /^\/app\/listings\/[^/]+\/edit$/, title: "Edit Listing" },
+  { match: /^\/app\/listings\/[^/]+$/, title: "Listing Details" },
+  { match: /^\/app\/listings$/, title: "Listings" },
+  { match: /^\/app\/categories$/, title: "Categories" },
+  { match: /^\/app\/listing-statuses$/, title: "Listing Statuses" },
+  { match: /^\/app\/collaborators$/, title: "Collaborators" },
+  { match: /^\/app\/account\/change-password$/, title: "Change Password" },
+  { match: /^\/app\/account$/, title: "Account Settings" },
+  { match: /^\/app\/unauthorized$/, title: "Access Denied" },
 ];
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, isOwner, logout } = useAuth();
-  const visible = navItems.filter((item) => !item.ownerOnly || isOwner);
+function titleForPath(pathname: string) {
+  return routeMeta.find((item) => item.match.test(pathname))?.title || "Lurevo";
+}
+
+const navigationGroups = [
+  {
+    label: "Overview",
+    items: [
+      { to: "/app/dashboard", label: "Dashboard", icon: HiOutlineSquares2X2 },
+      {
+        to: "/app/analytics",
+        label: "Analytics",
+        icon: HiOutlineChartBarSquare,
+      },
+    ],
+  },
+  {
+    label: "Store",
+    items: [
+      { to: "/app/listings", label: "Listings", icon: HiOutlineRectangleStack },
+      { to: "/app/orders", label: "Orders", icon: HiOutlineShoppingBag },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { to: "/app/categories", label: "Categories", icon: HiOutlineFolder },
+      { to: "/app/listing-statuses", label: "Statuses", icon: HiOutlineTag },
+      {
+        to: "/app/collaborators",
+        label: "Collaborators",
+        icon: HiOutlineUsers,
+        ownerOnly: true,
+      },
+    ],
+  },
+];
+
+function SidebarContent({
+  collapsed,
+  onToggle,
+  onNavigate,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+}) {
+  const { isOwner } = useAuth();
   return (
-    <div className="flex h-full flex-col bg-slate-950 text-white">
-      <div className="px-5 py-5">
-        <div className="text-xl font-bold">Lurevo</div>
-        <div className="mt-1 text-xs text-slate-400">Listing management</div>
+    <div className="flex h-full flex-col border-r border-border bg-white">
+      <div
+        className={clsx(
+          "flex h-16 items-center border-b border-border px-4",
+          collapsed ? "justify-center" : "justify-between",
+        )}
+      >
+        <Link
+          to="/app/dashboard"
+          className="flex min-w-0 items-center gap-2"
+          onClick={onNavigate}
+          aria-label="Lurevo dashboard"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-blue-900 text-sm font-bold text-white">
+            L
+          </span>
+          {!collapsed ? (
+            <span className="min-w-0">
+              <span className="block text-base font-bold leading-5 text-foreground">
+                Lurevo
+              </span>
+              <span className="block truncate text-[11px] font-medium text-muted">
+                Listing management
+              </span>
+            </span>
+          ) : null}
+        </Link>
+        {!collapsed ? (
+          <Button
+            variant="icon"
+            size="sm"
+            aria-label="Collapse sidebar"
+            onClick={onToggle}
+          >
+            <HiOutlineXMark className="h-4 w-4" />
+          </Button>
+        ) : null}
       </div>
-      <nav className="flex-1 space-y-1 px-3">
-        {visible.map((item) => {
-          const Icon = item.icon;
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {navigationGroups.map((group) => {
+          const visible = group.items.filter(
+            (item) => !item.ownerOnly || isOwner,
+          );
+          if (!visible.length) return null;
           return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition',
-                  isActive ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                )
-              }
-            >
-              <Icon className="h-5 w-5" />
-              {item.label}
-            </NavLink>
+            <div key={group.label} className="mb-5">
+              {!collapsed ? (
+                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-normal text-muted">
+                  {group.label}
+                </p>
+              ) : null}
+              <div className="space-y-1">
+                {visible.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={onNavigate}
+                      title={collapsed ? item.label : undefined}
+                      className={({ isActive }) =>
+                        clsx(
+                          "group relative flex h-10 items-center rounded-xl text-sm font-semibold transition duration-200",
+                          collapsed ? "justify-center px-0" : "gap-3 px-3",
+                          isActive
+                            ? "bg-blue-900 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-slate-100 hover:text-foreground",
+                        )
+                      }
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      {!collapsed ? (
+                        <span className="truncate">{item.label}</span>
+                      ) : null}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </nav>
-      <div className="border-t border-slate-800 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-800 text-sm font-semibold">{initials(user?.full_name || user?.email || 'U')}</div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{user?.full_name || 'User'}</p>
-            <p className="truncate text-xs text-slate-400">{user?.email}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <Badge tone={isOwner ? 'primary' : 'neutral'}>{user?.role}</Badge>
-          <button className="rounded-md p-2 text-slate-300 hover:bg-slate-800 hover:text-white" aria-label="Log out" onClick={() => void logout()}>
-            <HiOutlineArrowRightOnRectangle className="h-5 w-5" />
-          </button>
-        </div>
+      <div className="border-t border-border p-3">
+        <Button
+          variant="ghost"
+          className={clsx("w-full", collapsed ? "px-0" : "justify-start")}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={onToggle}
+        >
+          <HiOutlineBars3 className="h-5 w-5" />
+          {!collapsed ? "Collapse" : null}
+        </Button>
       </div>
     </div>
   );
 }
 
-function Breadcrumbs() {
-  const location = useLocation();
-  const parts = location.pathname
-    .replace('/app', '')
-    .split('/')
-    .filter(Boolean);
+function AccountMenu() {
+  const { user, isOwner, logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (ref.current && !ref.current.contains(event.target as Node))
+        setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
   return (
-    <div className="text-xs font-medium text-muted">
-      App {parts.map((part) => ` / ${part.replace(/-/g, ' ')}`).join('')}
+    <div className="relative" ref={ref}>
+      <button
+        className="flex items-center gap-2 rounded-full border border-border bg-white py-1 pl-1 pr-2 transition hover:bg-slate-50"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-900 text-xs font-bold text-white">
+          {initials(user?.full_name || user?.email || "U")}
+        </span>
+        <span className="hidden max-w-[160px] truncate text-sm font-semibold text-foreground md:block">
+          {user?.full_name || "User"}
+        </span>
+        <HiOutlineChevronDown className="h-4 w-4 text-muted" />
+      </button>
+      {open ? (
+        <div className="absolute right-0 mt-2 w-[min(280px,calc(100vw-2rem))] origin-top-right rounded-xl border border-border bg-white p-2 shadow-soft animate-in fade-in zoom-in-95">
+          <div className="px-3 py-2">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {user?.full_name || "User"}
+            </p>
+            <p className="truncate text-xs text-muted">{user?.email}</p>
+            <div className="mt-2">
+              <Badge tone={isOwner ? "primary" : "neutral"}>{user?.role}</Badge>
+            </div>
+          </div>
+          <div className="my-1 border-t border-border" />
+          <Link
+            className="flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            to="/app/account"
+            onClick={() => setOpen(false)}
+          >
+            <HiOutlineCog6Tooth className="h-4 w-4" /> View account settings
+          </Link>
+          <button
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-danger hover:bg-red-50"
+            onClick={() => void logout()}
+          >
+            <HiOutlineArrowLeftOnRectangle className="h-4 w-4" /> Log out
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 export function AppShell() {
-  const [open, setOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_KEY) === "true",
+  );
+  const location = useLocation();
+  const pageTitle = titleForPath(location.pathname);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_KEY, String(collapsed));
+  }, [collapsed]);
+
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[280px_1fr]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[280px] lg:block">
-        <SidebarContent />
+    <div
+      className="min-h-screen bg-background transition-[grid-template-columns] duration-200 lg:grid"
+      style={{
+        gridTemplateColumns: `var(--sidebar-current-width) minmax(0,1fr)`,
+        ["--sidebar-current-width" as string]: `${collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH}px`,
+      }}
+    >
+      <aside
+        className="fixed inset-y-0 left-0 z-30 hidden lg:block"
+        style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
+      >
+        <SidebarContent
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((value) => !value)}
+        />
       </aside>
-      {open ? (
+      {mobileOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <button className="absolute inset-0 bg-slate-950/50" aria-label="Close navigation" onClick={() => setOpen(false)} />
+          <button
+            className="absolute inset-0 bg-slate-950/45"
+            aria-label="Close navigation"
+            onClick={() => setMobileOpen(false)}
+          />
           <div className="relative h-full w-[280px]">
-            <SidebarContent onNavigate={() => setOpen(false)} />
+            <SidebarContent
+              collapsed={false}
+              onToggle={() => setMobileOpen(false)}
+              onNavigate={() => setMobileOpen(false)}
+            />
           </div>
         </div>
       ) : null}
       <main className="min-w-0 lg:col-start-2">
-        <header className="sticky top-0 z-20 border-b border-border bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" className="px-3 lg:hidden" aria-label="Open navigation" onClick={() => setOpen(true)}>
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-white/95 px-4 backdrop-blur sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            {/* <Button variant="icon" aria-label="Open navigation" onClick={() => setMobileOpen(true)} className="lg:hidden">
               <HiOutlineBars3 className="h-5 w-5" />
             </Button>
-            <div className="min-w-0">
-              <Breadcrumbs />
-            </div>
+            <Button variant="icon" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((value) => !value)} className="hidden lg:inline-flex">
+              <HiOutlineBars3 className="h-5 w-5" />
+            </Button> */}
+            <h1 className="truncate text-lg font-semibold text-foreground">
+              {pageTitle}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <AccountMenu />
           </div>
         </header>
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="w-full px-4 py-4 sm:px-6 lg:px-7">
           <Outlet />
         </div>
       </main>
@@ -121,17 +323,57 @@ export function AppShell() {
   );
 }
 
-export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+export function Modal({
+  title,
+  children,
+  onClose,
+  description,
+  width = "max-w-2xl",
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  description?: string;
+  width?: string;
+}) {
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-surface shadow-soft">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button aria-label="Close dialog" className="rounded-md p-2 hover:bg-slate-100" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-3"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className={clsx(
+          "max-h-[92vh] w-full overflow-hidden rounded-[18px] border border-border bg-surface shadow-soft",
+          width,
+        )}
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-base font-bold text-foreground">{title}</h2>
+            {description ? (
+              <p className="mt-1 text-sm text-muted">{description}</p>
+            ) : null}
+          </div>
+          <button
+            aria-label="Close dialog"
+            className="rounded-full p-2 text-muted hover:bg-slate-100"
+            onClick={onClose}
+          >
             <HiOutlineXMark className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="max-h-[calc(92vh-74px)] overflow-y-auto p-5">
+          {children}
+        </div>
       </div>
     </div>
   );

@@ -1,17 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 246 248 251;
+  --background: 247 248 250;
   --surface: 255 255 255;
-  --border: 224 229 237;
-  --foreground: 22 28 45;
-  --muted: 96 108 128;
-  --primary: 55 79 176;
-  --danger: 203 49 49;
-  --success: 21 128 86;
-  --warning: 184 116 24;
+  --surface-soft: 250 250 250;
+  --surface-muted: 243 244 246;
+  --border: 229 231 235;
+  --border-strong: 208 213 221;
+  --foreground: 22 24 29;
+  --muted: 102 112 133;
+  --primary: 29 78 216;
+  --primary-hover: 30 64 175;
+  --primary-dark: 23 37 84;
+  --primary-soft: 239 246 255;
+  --primary-border: 191 219 254;
+  --danger: 240 68 56;
+  --success: 18 183 106;
+  --warning: 247 144 9;
 }
 
 * {
@@ -24,7 +33,9 @@ body {
   min-height: 100vh;
   background: rgb(var(--background));
   color: rgb(var(--foreground));
-  font-family: Rubik, ui-sans-serif, system-ui, sans-serif;
+  font-family: Figtree, ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  letter-spacing: 0;
 }
 
 button,
@@ -39,8 +50,19 @@ a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid rgba(55, 79, 176, 0.28);
+  outline: 3px solid rgba(59, 130, 246, 0.28);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .scrollbar-thin {
