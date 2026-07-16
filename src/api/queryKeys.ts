@@ -1,0 +1,20 @@
+export const queryKeys = {
+  auth: {
+    me: ['auth', 'me'] as const,
+  },
+  categories: {
+    list: (params?: object) => ['categories', params] as const,
+    detail: (id: string) => ['categories', id] as const,
+  },
+  statuses: {
+    list: (params?: object) => ['listing-statuses', params] as const,
+    detail: (id: string) => ['listing-statuses', id] as const,
+  },
+  listings: {
+    list: (params?: object) => ['listings', params] as const,
+    detail: (id: string) => ['listings', id] as const,
+  },
+  images: {
+    list: (listingId: string) => ['listing-images', listingId] as const,
+  },
+};
