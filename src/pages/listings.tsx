@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HiOutlineAdjustmentsHorizontal,
   HiOutlineArrowLeft,
+  HiOutlineChevronDown,
   HiOutlineEye,
   HiOutlinePencilSquare,
   HiOutlinePhoto,
@@ -439,6 +440,9 @@ function ListingGrid({
                 {formatDate(listing.updated_at)}
               </span>
             </div>
+            <div className="mt-3 rounded-lg bg-slate-50 p-2">
+              <SupplierSummary listing={listing} />
+            </div>
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
               <p className="text-base font-bold">
                 {formatCurrency(listing.price, listing.currency)}
@@ -484,6 +488,7 @@ function ListingTable({
           <th className="px-4 py-3">Status</th>
           <th className="px-4 py-3">Price</th>
           <th className="px-4 py-3">Images</th>
+          <th className="px-4 py-3">Supplier</th>
           <th className="px-4 py-3">Updated</th>
           <th className="px-4 py-3 text-right">Actions</th>
         </tr>
@@ -536,6 +541,9 @@ function ListingTable({
             <td className="px-4 py-3">
               {listing.image_count || listing.images?.length || 0}
             </td>
+            <td className="px-4 py-3">
+              <SupplierSummary listing={listing} />
+            </td>
             <td className="px-4 py-3 text-muted">
               {formatDateTime(listing.updated_at)}
             </td>
@@ -576,6 +584,23 @@ function StatusPill({ listing }: { listing: Listing }) {
       />
       {listing.status?.name || "No status"}
     </Badge>
+  );
+}
+
+function SupplierSummary({ listing }: { listing: Listing }) {
+  const supplier = listing.supplier;
+  if (!supplier?.sku) {
+    return <span className="text-xs text-muted">Supplier config missing</span>;
+  }
+  return (
+    <div className="text-xs text-muted">
+      <p className="font-semibold text-slate-700">Supplier SKU: {supplier.sku}</p>
+      <p>
+        {supplier.options.length} options · {supplier.colors.length} colors ·{" "}
+        {supplier.print_methods.length} print methods ·{" "}
+        {supplier.positions.length} positions
+      </p>
+    </div>
   );
 }
 
@@ -621,7 +646,10 @@ function listingToDefaults(listing?: Listing): ListingFormValues {
   };
 }
 
-function valuesToRequest(values: ListingFormValues): ListingRequest {
+function valuesToRequest(
+  values: ListingFormValues,
+  supplier?: Listing["supplier"],
+): ListingRequest {
   return {
     title: values.title,
     short_name: values.short_name,
@@ -629,6 +657,15 @@ function valuesToRequest(values: ListingFormValues): ListingRequest {
     description: values.description,
     short_description: values.short_description || undefined,
     sku: values.sku || undefined,
+    supplier: supplier
+      ? {
+          sku: supplier.sku || undefined,
+          options: supplier.options,
+          colors: supplier.colors,
+          print_methods: supplier.print_methods,
+          positions: supplier.positions,
+        }
+      : undefined,
     category_id: values.category_id,
     status_id: values.status_id || undefined,
     price: values.price,
@@ -675,15 +712,29 @@ function ListingFormPage({ mode }: { mode: "create" | "edit" }) {
     queryFn: () => statusApi.list({ page: 1, page_size: 200, is_active: true }),
   });
   const [serverError, setServerError] = useState<string | null>(null);
+  const [supplierOpen, setSupplierOpen] = useState(mode === "create");
+  const [supplier, setSupplier] = useState<Listing["supplier"]>({
+    sku: "",
+    options: [],
+    colors: [],
+    print_methods: [],
+    positions: [],
+    ready: false,
+  });
   const form = useForm<ListingFormValues>({
     resolver: zodResolver(listingSchema),
     values: listingToDefaults(mode === "edit" ? detail.data : undefined),
   });
+  useEffect(() => {
+    if (mode === "edit" && detail.data?.supplier) {
+      setSupplier(detail.data.supplier);
+    }
+  }, [detail.data, mode]);
   const save = useMutation({
     mutationFn: (values: ListingFormValues) =>
       mode === "edit" && id
-        ? listingApi.update(id, valuesToRequest(values))
-        : listingApi.create(valuesToRequest(values)),
+        ? listingApi.update(id, valuesToRequest(values, supplier))
+        : listingApi.create(valuesToRequest(values, supplier)),
     onSuccess: async (listing) => {
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
       toast.push({
@@ -824,6 +875,89 @@ function ListingFormPage({ mode }: { mode: "create" | "edit" }) {
             <Field label="Published at">
               <Input type="datetime-local" {...form.register("published_at")} />
             </Field>
+          </Card>
+          <Card className="grid gap-4 p-5">
+            <button
+              type="button"
+              className="flex items-center justify-between gap-3 text-left"
+              onClick={() => setSupplierOpen((value) => !value)}
+              aria-expanded={supplierOpen}
+            >
+              <SectionTitle
+                title="Supplier Production Configuration"
+                description={
+                  supplier.sku
+                    ? `${supplier.options.length} options, ${supplier.colors.length} colors, ${supplier.print_methods.length} print methods, ${supplier.positions.length} positions`
+                    : "Supplier values are selected by employees on orders."
+                }
+              />
+              <HiOutlineChevronDown
+                className={clsx(
+                  "h-5 w-5 text-muted transition",
+                  supplierOpen && "rotate-180",
+                )}
+              />
+            </button>
+            {supplierOpen ? (
+              <div className="grid gap-4">
+                <Field label="Supplier SKU">
+                  <Input
+                    placeholder="TSHIRT-001"
+                    value={supplier.sku || ""}
+                    onChange={(event) =>
+                      setSupplier((current) => ({
+                        ...current,
+                        sku: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+                <TagInput
+                  label="Options"
+                  values={supplier.options}
+                  placeholder="S, M, L, XL"
+                  onChange={(values) =>
+                    setSupplier((current) => ({
+                      ...current,
+                      options: values,
+                    }))
+                  }
+                />
+                <TagInput
+                  label="Colors"
+                  values={supplier.colors}
+                  placeholder="White, Black"
+                  onChange={(values) =>
+                    setSupplier((current) => ({
+                      ...current,
+                      colors: values,
+                    }))
+                  }
+                />
+                <TagInput
+                  label="Print Methods"
+                  values={supplier.print_methods}
+                  placeholder="DTF Print, UV Print"
+                  onChange={(values) =>
+                    setSupplier((current) => ({
+                      ...current,
+                      print_methods: values,
+                    }))
+                  }
+                />
+                <TagInput
+                  label="Positions"
+                  values={supplier.positions}
+                  placeholder="front, back"
+                  onChange={(values) =>
+                    setSupplier((current) => ({
+                      ...current,
+                      positions: values,
+                    }))
+                  }
+                />
+              </div>
+            ) : null}
           </Card>
           <Card className="grid gap-4 p-5">
             <SectionTitle title="Classification" />
@@ -998,6 +1132,14 @@ export function ListingDetailPage() {
               value={formatCurrency(listing.price, listing.currency)}
             />
             <Info label="SKU" value={listing.sku || "None"} />
+            <div>
+              <dt className="text-xs font-semibold uppercase text-muted">
+                Supplier
+              </dt>
+              <dd className="mt-1">
+                <SupplierSummary listing={listing} />
+              </dd>
+            </div>
             <Info
               label="Images"
               value={String(listing.image_count || listing.images?.length || 0)}
@@ -1040,6 +1182,76 @@ export function ListingDetailPage() {
         onConfirm={() => remove.mutate()}
       />
     </div>
+  );
+}
+
+function TagInput({
+  label,
+  values,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  placeholder: string;
+  onChange: (values: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+
+  function addValue(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    if (values.some((item) => item.toLowerCase() === value.toLowerCase())) {
+      setError("Duplicate values are ignored.");
+      setDraft("");
+      return;
+    }
+    setError("");
+    onChange([...values, value]);
+    setDraft("");
+  }
+
+  return (
+    <Field label={label} error={error}>
+      <div className="rounded-[10px] border border-border bg-white p-2 shadow-sm focus-within:border-primary">
+        <div className="flex flex-wrap gap-1.5">
+          {values.map((value) => (
+            <span
+              key={value}
+              className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700"
+            >
+              {value}
+              <button
+                type="button"
+                aria-label={`Remove ${value}`}
+                onClick={() =>
+                  onChange(values.filter((item) => item !== value))
+                }
+              >
+                <HiOutlineXMark className="h-3.5 w-3.5" />
+              </button>
+            </span>
+          ))}
+          <input
+            value={draft}
+            placeholder={values.length ? "" : placeholder}
+            className="min-w-[120px] flex-1 bg-transparent px-1 py-1 text-sm outline-none"
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addValue(draft);
+              }
+              if (event.key === "Backspace" && !draft && values.length) {
+                onChange(values.slice(0, -1));
+              }
+            }}
+            onBlur={() => addValue(draft)}
+          />
+        </div>
+      </div>
+    </Field>
   );
 }
 

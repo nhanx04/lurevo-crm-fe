@@ -14,6 +14,7 @@ import {
   ListingEditPage,
   ListingsPage,
 } from "./pages/listings";
+import { OrderCreatePage, OrderDetailPage, OrdersPage } from "./pages/orders";
 import {
   ComingSoonPage,
   NotFoundPage,
@@ -41,15 +42,9 @@ export function App() {
           <Route path="listings/:id/edit" element={<ListingEditPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="listing-statuses" element={<StatusesPage />} />
-          <Route
-            path="orders"
-            element={
-              <ComingSoonPage
-                title="Orders"
-                description="Order APIs are not available yet. This route is reserved for the future order workflow."
-              />
-            }
-          />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/new" element={<OrderCreatePage />} />
+          <Route path="orders/:id" element={<OrderDetailPage />} />
           <Route element={<OwnerRoute />}>
             <Route path="collaborators" element={<CollaboratorsPage />} />
           </Route>

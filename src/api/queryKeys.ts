@@ -17,4 +17,11 @@ export const queryKeys = {
   images: {
     list: (listingId: string) => ['listing-images', listingId] as const,
   },
+  shops: {
+    list: ['shops'] as const,
+  },
+  orders: {
+    list: (params?: object) => ['orders', params] as const,
+    detail: (id: string) => ['orders', id] as const,
+  },
 };
