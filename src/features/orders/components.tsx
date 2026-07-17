@@ -1,6 +1,6 @@
 import { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   HiOutlineArrowLeft,
   HiOutlineArrowDownTray,
@@ -18,6 +18,7 @@ import {
   HiOutlineXMark,
 } from "react-icons/hi2";
 import clsx from "clsx";
+import { queryKeys } from "@/api/queryKeys";
 import { categoryApi, orderApi } from "@/api/services";
 import { useListingSelector, useOrderActivities, useShops, useWorkflowStatuses } from "./hooks";
 import type {
@@ -954,23 +955,78 @@ function OrderInfoTab({ order }: { order: Order }) {
 
 function SupplierSummaryTab({ order }: { order: Order }) {
   const supplier = order.supplier;
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const submitted = Boolean(supplier.submitted || supplier.order_id || supplier.submitted_at || order.submitted_at || order.status.code === orderStatusCodes.supplierSubmitted);
+  const statusLabel = supplier.sync_needed
+    ? "Submitted - details not synchronized"
+    : submitted
+      ? supplier.status || "Submitted"
+      : "Not submitted";
+  const missing = (value?: string | number | boolean | null) => value === undefined || value === null || value === "";
+  const display = (value?: string | number | boolean | null) => {
+    if (missing(value)) return "—";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return String(value);
+  };
+  const refresh = useMutation({
+    mutationFn: () => orderApi.syncSupplier(order.id),
+    onSuccess: async (updated) => {
+      queryClient.setQueryData(queryKeys.orders.detail(order.id), updated);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.activities(order.id, { page_size: 20 }) }),
+        queryClient.invalidateQueries({ queryKey: ["orders"] }),
+      ]);
+      toast.push({ type: "success", title: "Supplier details refreshed" });
+    },
+    onError: (error) => toast.push({ type: "error", title: "Refresh failed", message: apiMessage(error, "Unable to refresh supplier details") }),
+  });
+  const shipping = supplier.shipping;
   return (
     <div className="grid gap-4">
-      <SupplierStatusBadge status={supplier.status} />
+      <div className="flex items-center justify-between gap-3">
+        <SupplierStatusBadge status={statusLabel} />
+        {submitted ? (
+          <Button type="button" size="sm" variant="secondary" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+            {refresh.isPending ? <Spinner label="Refreshing" /> : "Refresh"}
+          </Button>
+        ) : null}
+      </div>
       <dl className="grid gap-4 text-sm sm:grid-cols-2">
-        <Info label="Supplier Order ID" value={supplier.order_id || "-"} copyValue={supplier.order_id || undefined} />
-        <Info label="Supplier Source" value={supplier.source || "-"} />
-        <Info label="Tracking Number" value={supplier.tracking_number || "-"} copyValue={supplier.tracking_number || undefined} />
-        <Info label="Label Buy" value={supplier.label_buy || "-"} />
-        <Info label="Total Items" value={String(supplier.total_items ?? "-")} />
-        <Info label="Total Quantity" value={String(supplier.total_quantity ?? "-")} />
-        <Info label="Items Fee" value={supplier.items_fee || "-"} />
-        <Info label="Extra Services Fee" value={supplier.extra_services_fee || "-"} />
-        <Info label="Shipping Fee" value={supplier.shipping_fee || "-"} />
-        <Info label="Total Fee" value={supplier.total_fee || "-"} />
+        <Info label="Supplier Order ID" value={display(supplier.order_id)} copyValue={supplier.order_id || undefined} />
+        <Info label="Customer Order ID" value={display(supplier.customer_order_id || order.etsy_order_id)} copyValue={supplier.customer_order_id || order.etsy_order_id} />
+        <Info label="Supplier Source" value={display(supplier.source)} />
+        <Info label="Supplier Status" value={display(supplier.status)} />
+        <Info label="Tracking Number" value={display(supplier.tracking_number)} copyValue={supplier.tracking_number || undefined} />
+        <Info label="Carrier" value={display(supplier.carrier)} />
+        <Info label="Label Buy" value={display(supplier.label_buy)} />
+        <Info label="Total Items" value={display(supplier.total_items)} />
+        <Info label="Total Quantity" value={display(supplier.total_quantity)} />
+        <Info label="Items Fee" value={display(supplier.items_fee)} />
+        <Info label="Extra Services Fee" value={display(supplier.extra_services_fee)} />
+        <Info label="Shipping Fee" value={display(supplier.shipping_fee)} />
+        <Info label="Label Fee" value={display(supplier.label_fee)} />
+        <Info label="Total Fee" value={display(supplier.total_fee)} />
         <Info label="Supplier Created At" value={formatDateTime(supplier.created_at)} />
-        <Info label="Submitted At" value={formatDateTime(order.submitted_at)} />
+        <Info label="Submitted At" value={formatDateTime(supplier.submitted_at || order.submitted_at)} />
+        <Info label="Last Synced At" value={formatDateTime(supplier.last_synced_at)} />
       </dl>
+      {shipping ? (
+        <details className="rounded border border-border p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Detected Shipping Information</summary>
+          <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            <Info label="Buyer" value={display(shipping.buyer)} />
+            <Info label="Phone" value={display(shipping.phone)} />
+            <Info label="Street" value={display(shipping.street)} />
+            <Info label="Street 2" value={display(shipping.street_2)} />
+            <Info label="City" value={display(shipping.city)} />
+            <Info label="State" value={display(shipping.state)} />
+            <Info label="ZIP Code" value={display(shipping.zipcode)} />
+            <Info label="Country" value={display(shipping.country)} />
+          </dl>
+        </details>
+      ) : null}
     </div>
   );
 }

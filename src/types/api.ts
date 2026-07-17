@@ -264,6 +264,7 @@ export type ShippingLabel = {
   uploaded_at: string;
   replaced_at?: string | null;
   uploaded_by?: { id: string; full_name: string } | null;
+  supplier_detected_data?: Record<string, unknown> | null;
 };
 
 export type OrderActivity = {
@@ -289,18 +290,35 @@ export type Order = {
   reviewed_by?: { id: string; full_name: string } | null;
   reviewed_at?: string | null;
   supplier: {
+    submitted?: boolean;
+    sync_needed?: boolean;
     order_id?: string | null;
+    customer_order_id?: string | null;
     status?: string | null;
     source?: string | null;
+    carrier?: string | null;
     tracking_number?: string | null;
     total_items?: number | null;
     total_quantity?: number | null;
     items_fee?: string | null;
     extra_services_fee?: string | null;
     shipping_fee?: string | null;
+    label_fee?: string | null;
     total_fee?: string | null;
-    label_buy?: string | null;
+    label_buy?: boolean | null;
     created_at?: string | null;
+    submitted_at?: string | null;
+    last_synced_at?: string | null;
+    shipping?: {
+      buyer?: string | null;
+      phone?: string | null;
+      street?: string | null;
+      street_2?: string | null;
+      city?: string | null;
+      state?: string | null;
+      zipcode?: string | null;
+      country?: string | null;
+    } | null;
   };
   version: number;
   products_count: number;
