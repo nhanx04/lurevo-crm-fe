@@ -1,4 +1,4 @@
-import { ChangeEvent, DragEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -29,11 +29,11 @@ import type {
   OrderLine,
   ShippingLabel,
 } from "@/types/api";
+import { ApiError } from "@/types/api";
 import {
   ActionIconButton,
   Badge,
   Button,
-  Card,
   Field,
   Input,
   PaginationControls,
@@ -55,6 +55,7 @@ import {
   itemProductionComplete,
   listingSupplierReady,
   orderStatusCodes,
+  orderStatusAccent,
   orderTotalQuantity,
   readinessProgress,
   statusColor,
@@ -217,6 +218,8 @@ export function OrdersTable({
   onPage: (page: number) => void;
 }) {
   const navigate = useNavigate();
+  const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
+  const openOrder = (orderId: string) => navigate(`/app/orders/${orderId}`);
   if (loading) return <SkeletonRows rows={8} />;
   if (error) return <ErrorState message="Could not load orders." onRetry={onRetry} />;
   if (!orders?.length) {
@@ -229,63 +232,26 @@ export function OrdersTable({
           <tr>
             <th className="px-4 py-3">Order</th>
             <th className="px-4 py-3">Shop / Customer</th>
-            <th className="px-4 py-3">Products and Items</th>
-            <th className="px-4 py-3">Design Preview</th>
-            <th className="px-4 py-3">Mockup Preview</th>
+            <th className="px-4 py-3">Product and Configuration</th>
+            <th className="px-4 py-3">Design</th>
+            <th className="px-4 py-3">Mockup</th>
+            <th className="px-4 py-3">Qty</th>
             <th className="px-4 py-3">Workflow Status</th>
             <th className="px-4 py-3">Supplier Status</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {orders.map((order) => {
-            const missing = orderListMissing(order);
-            return (
-              <tr
-                key={order.id}
-                className="cursor-pointer hover:bg-slate-50/70"
-                onClick={() => navigate(`/app/orders/${order.id}`)}
-              >
-                <td className="min-w-[150px] px-4 py-5 align-middle">
-                  <Link
-                    to={`/app/orders/${order.id}`}
-                    onClick={(event) => event.stopPropagation()}
-                    className="font-semibold text-foreground hover:text-blue-700"
-                  >
-                    {order.etsy_order_id}
-                  </Link>
-                  <p className="mt-1 text-xs text-muted">{formatDateTime(order.ordered_at || order.created_at)}</p>
-                  <p className="mt-2 text-xs font-semibold text-slate-600">{order.status.name}</p>
-                </td>
-                <td className="min-w-[150px] px-4 py-5 align-middle">
-                  <p className="font-semibold">{order.shop.name}</p>
-                  <p className="mt-1 text-xs text-muted">{order.customer_name || "No customer"}</p>
-                </td>
-                <td className="min-w-[240px] px-4 py-5 align-middle">
-                  <p className="text-sm font-semibold">
-                    {order.products_count} products / {order.items_count} items / Qty {orderTotalQuantity(order) || order.items_count}
-                  </p>
-                  <ProductNameSummary order={order} />
-                  {missing.length ? (
-                    <p className="mt-2 text-xs font-medium text-amber-700">Missing: {missing.join(", ")}</p>
-                  ) : null}
-                </td>
-                <td className="px-4 py-5 align-middle">
-                  <OrderPreviewThumbnails order={order} kind="design" />
-                </td>
-                <td className="px-4 py-5 align-middle">
-                  <OrderPreviewThumbnails order={order} kind="mockup" />
-                </td>
-                <td className="px-4 py-5 align-middle"><OrderStatusBadge status={order.status} /></td>
-                <td className="px-4 py-5 align-middle"><SupplierStatusBadge status={order.supplier.status} /></td>
-                <td className="px-4 py-5 text-right align-middle">
-                  <Link to={`/app/orders/${order.id}`} onClick={(event) => event.stopPropagation()}>
-                    <Button type="button" variant="secondary" size="sm">Open</Button>
-                  </Link>
-                </td>
-              </tr>
-            );
-          })}
+          {orders.map((order) => (
+            <OrderTableGroup
+              key={order.id}
+              order={order}
+              hovered={hoveredOrderId === order.id}
+              onHover={(active) => setHoveredOrderId(active ? order.id : null)}
+              onOpen={() => openOrder(order.id)}
+              onChanged={onRetry}
+            />
+          ))}
         </tbody>
       </Table>
       <PaginationControls page={page} totalPages={totalPages} totalItems={totalItems} onPage={onPage} />
@@ -293,14 +259,394 @@ export function OrdersTable({
   );
 }
 
-function ProductNameSummary({ order }: { order: Order }) {
-  const names = order.lines?.map((line) => line.listing_sku || line.listing_title).filter(Boolean) || [];
-  if (!names.length) return <p className="mt-1 text-xs text-muted">Product details load in the order workspace.</p>;
+const COLLAPSED_ITEM_LIMIT = 5;
+
+type OrderTableItem = {
+  key: string;
+  line?: OrderLine;
+  item?: OrderItem;
+};
+
+function OrderTableGroup({
+  order,
+  hovered,
+  onHover,
+  onOpen,
+  onChanged,
+}: {
+  order: Order;
+  hovered: boolean;
+  onHover: (active: boolean) => void;
+  onOpen: () => void;
+  onChanged: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const allItems = orderTableItems(order);
+  const hasMore = allItems.length > COLLAPSED_ITEM_LIMIT;
+  const visibleItems = expanded || !hasMore ? allItems : allItems.slice(0, COLLAPSED_ITEM_LIMIT);
+  const rowSpan = visibleItems.length + (hasMore ? 1 : 0);
+  const accent = orderStatusAccent(order.status);
+  const groupClass = clsx(
+    "cursor-pointer transition focus:bg-blue-50/80 focus:outline-none",
+    hovered ? "bg-blue-50/80" : accent.row,
+  );
+  const openFromRow = (event: ReactMouseEvent | ReactKeyboardEvent) => {
+    if (isRowInteractive(event.target)) return;
+    if ("key" in event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+    }
+    onOpen();
+  };
+
   return (
-    <div className="mt-1 space-y-0.5 text-xs text-muted">
-      {names.slice(0, 2).map((name) => <p key={name} className="truncate">{name}</p>)}
-      {names.length > 2 ? <p>+{names.length - 2} more</p> : null}
+    <>
+      {visibleItems.map((entry, index) => (
+        <tr
+          key={entry.key}
+          tabIndex={0}
+          className={clsx(groupClass, index === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-100")}
+          onClick={openFromRow}
+          onKeyDown={openFromRow}
+          onMouseEnter={() => onHover(true)}
+          onMouseLeave={() => onHover(false)}
+        >
+          {index === 0 ? (
+            <>
+              <OrderMetadataCell order={order} accent={accent.marker} rowSpan={rowSpan} />
+              <td rowSpan={rowSpan} className="min-w-[150px] px-4 py-4 align-top">
+                <p className="font-semibold">{order.shop.name}</p>
+                <p className="mt-1 text-xs text-muted">{order.customer_name || "No customer"}</p>
+              </td>
+            </>
+          ) : null}
+          <ItemProductCell entry={entry} />
+          <td className="px-4 py-3 align-middle">
+            <ItemDesignPreview entry={entry} />
+          </td>
+          <td className="px-4 py-3 align-middle">
+            <ItemMockupPreview entry={entry} />
+          </td>
+          <td className="px-4 py-3 text-sm font-semibold align-middle">{entry.item?.quantity || 0}</td>
+          {index === 0 ? (
+            <>
+              <td rowSpan={rowSpan} className="px-4 py-4 align-top"><OrderStatusBadge status={order.status} /></td>
+              <td rowSpan={rowSpan} className="px-4 py-4 align-top"><SupplierStatusBadge status={order.supplier.status} /></td>
+              <td rowSpan={rowSpan} className="px-4 py-4 text-right align-top">
+                <SupplierTableAction order={order} onChanged={onChanged} />
+              </td>
+            </>
+          ) : null}
+        </tr>
+      ))}
+      {hasMore ? (
+        <tr
+          className={clsx(groupClass, "border-t border-slate-100")}
+          onMouseEnter={() => onHover(true)}
+          onMouseLeave={() => onHover(false)}
+        >
+          <td colSpan={4} className="px-4 py-2">
+            <button
+              type="button"
+              className="text-xs font-semibold text-blue-700 hover:text-blue-900"
+              aria-expanded={expanded}
+              data-row-interactive="true"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded((value) => !value);
+              }}
+            >
+              {expanded ? "Collapse items" : `Show ${allItems.length - COLLAPSED_ITEM_LIMIT} more items`}
+            </button>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function OrderMetadataCell({ order, accent, rowSpan }: { order: Order; accent: string; rowSpan: number }) {
+  return (
+    <td rowSpan={rowSpan} className="relative min-w-[150px] px-4 py-4 align-top">
+      <span className={clsx("absolute inset-y-2 left-0 w-1 rounded-r-full opacity-80", accent)} />
+      <Link
+        to={`/app/orders/${order.id}`}
+        onClick={(event) => event.stopPropagation()}
+        className="font-semibold text-foreground hover:text-blue-700"
+      >
+        {order.etsy_order_id}
+      </Link>
+      <p className="mt-1 text-xs text-muted">{formatDateTime(order.ordered_at || order.created_at)}</p>
+      <p className="mt-2 text-xs font-semibold text-slate-600">
+        {order.products_count} products / {order.items_count} items / Qty {orderTotalQuantity(order) || order.items_count}
+      </p>
+    </td>
+  );
+}
+
+function ItemProductCell({ entry }: { entry: OrderTableItem }) {
+  if (!entry.item || !entry.line) {
+    return (
+      <td className="min-w-[300px] px-4 py-3 align-middle">
+        <p className="font-semibold text-slate-700">No items added</p>
+        <p className="mt-1 text-xs text-muted">Add a listing in the order workspace.</p>
+      </td>
+    );
+  }
+  const item = entry.item;
+  const line = entry.line;
+  const optionColor = [item.option || "Option missing", item.color || "Color missing"].join(" / ");
+  const methodPosition = [item.print_method || "Print method missing", item.main_position || "Position missing"].join(" / ");
+  return (
+    <td className="min-w-[320px] px-4 py-3 align-middle">
+      <p className="font-semibold text-foreground">{line.listing_title}</p>
+      <p className="mt-1 text-xs text-muted">{[line.listing_sku, item.supplier_sku].filter(Boolean).join(" / ") || "SKU missing"}</p>
+      <p className="mt-2 text-xs font-medium text-slate-700">Item {item.item_number} / {optionColor}</p>
+      <p className="mt-1 text-xs text-muted">{methodPosition}</p>
+    </td>
+  );
+}
+
+function ItemDesignPreview({ entry }: { entry: OrderTableItem }) {
+  const files = selectedFiles(entry.item, ["main_design", "sub_design"]);
+  return (
+    <ItemFilePreview
+      files={files}
+      placeholder="No design"
+      ariaLabel={`Preview design for item ${entry.item?.item_number || 0}`}
+      indicator={files.length > 1 ? "+ sub" : undefined}
+      itemReference={itemReference(entry)}
+    />
+  );
+}
+
+function ItemMockupPreview({ entry }: { entry: OrderTableItem }) {
+  const files = selectedFiles(entry.item, ["mockup", "mockup2"]);
+  return (
+    <ItemFilePreview
+      files={files}
+      placeholder="No mockup"
+      ariaLabel={`Preview mockup for item ${entry.item?.item_number || 0}`}
+      indicator={files.length > 1 ? "+1" : undefined}
+      itemReference={itemReference(entry)}
+    />
+  );
+}
+
+function ItemFilePreview({
+  files,
+  placeholder,
+  ariaLabel,
+  indicator,
+  itemReference,
+}: {
+  files: OrderItemFile[];
+  placeholder: string;
+  ariaLabel: string;
+  indicator?: string;
+  itemReference?: string;
+}) {
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  if (!files.length) {
+    return (
+      <span className="flex h-11 w-11 items-center justify-center rounded border border-dashed border-border bg-slate-50 text-slate-400" title={placeholder}>
+        <HiOutlinePhoto className="h-5 w-5" />
+      </span>
+    );
+  }
+  const file = files[0];
+  return (
+    <div className="relative inline-flex" data-row-interactive="true">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="flex h-11 w-11 items-center justify-center overflow-hidden rounded border border-border bg-white text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
+        aria-label={ariaLabel}
+        title={file.original_name}
+        onClick={(event) => {
+          event.stopPropagation();
+          setPreviewIndex(0);
+        }}
+      >
+        {file.url && file.mime_type.startsWith("image/") ? <img src={file.url} alt="" className="h-full w-full object-contain" /> : <FileGlyph file={file} />}
+      </button>
+      {indicator ? <span className="absolute -right-2 -top-2 rounded-full bg-blue-700 px-1.5 py-0.5 text-[10px] font-bold text-white">{indicator}</span> : null}
+      {previewIndex !== null ? (
+        <FilePreviewModal
+          file={files[previewIndex]}
+          url={files[previewIndex]?.url}
+          itemReference={itemReference}
+          hasPrevious={previewIndex > 0}
+          hasNext={previewIndex < files.length - 1}
+          onPrevious={() => setPreviewIndex((index) => (index === null ? index : Math.max(0, index - 1)))}
+          onNext={() => setPreviewIndex((index) => (index === null ? index : Math.min(files.length - 1, index + 1)))}
+          onClose={() => {
+            setPreviewIndex(null);
+            window.setTimeout(() => triggerRef.current?.focus(), 0);
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function orderTableItems(order: Order): OrderTableItem[] {
+  const items = (order.lines || []).flatMap((line) => line.items.map((item) => ({ key: item.id, line, item })));
+  return items.length ? items : [{ key: `${order.id}-empty` }];
+}
+
+function selectedFiles(item: OrderItem | undefined, usages: string[]) {
+  if (!item) return [];
+  return usages
+    .map((usage) => item.files?.find((file) => file.usage === usage && file.is_selected))
+    .filter((file): file is OrderItemFile => Boolean(file));
+}
+
+function itemReference(entry: OrderTableItem) {
+  if (!entry.item) return undefined;
+  return `Item ${entry.item.item_number}${entry.line?.listing_title ? ` / ${entry.line.listing_title}` : ""}`;
+}
+
+function isRowInteractive(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest("button,a,input,select,textarea,[data-row-interactive='true']"));
+}
+
+function SupplierTableAction({ order, onChanged }: { order: Order; onChanged: () => void }) {
+  const toast = useToast();
+  const [sendOpen, setSendOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [labelOpen, setLabelOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  async function deleteLocalOrder() {
+    setDeleting(true);
+    try {
+      await orderApi.remove(order.id);
+      toast.push({ type: "success", title: "Order deleted" });
+      await onChanged();
+    } catch (error) {
+      toast.push({ type: "error", title: "Delete failed", message: apiMessage(error, "Unable to delete order") });
+    } finally {
+      setDeleting(false);
+    }
+  }
+  const ready = Boolean(order.readiness?.ready) || (!orderListMissing(order).length && order.status.code === orderStatusCodes.readyToSend);
+  const submitted = order.status.code === orderStatusCodes.supplierSubmitted || Boolean(order.supplier.order_id);
+  const cancelled = order.status.code === orderStatusCodes.cancelled;
+  const failed = order.status.code === orderStatusCodes.supplierError || order.supplier.status?.toLowerCase().includes("failed");
+  const labelFile = activeShippingLabel(order);
+  const actionButtonClass = "w-[150px]";
+  const viewLabelClass = "w-[150px] border-green-600 bg-green-600 text-white hover:bg-green-700";
+  if (submitted) {
+    return (
+      <div className="flex w-[150px] flex-col items-stretch gap-2" data-row-interactive="true">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          className={viewLabelClass}
+          disabled={!labelFile}
+          title={labelFile ? "View shipping label" : "No active shipping label"}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (labelFile) setLabelOpen(true);
+          }}
+        >
+          <HiOutlineEye />
+          View Label
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="danger"
+          className={actionButtonClass}
+          onClick={(event) => {
+            event.stopPropagation();
+            setCancelOpen(true);
+          }}
+        >
+          Cancel Order
+        </Button>
+        {labelOpen && labelFile ? <ShippingLabelPreviewDialog label={labelFile} onClose={() => setLabelOpen(false)} /> : null}
+        {cancelOpen ? <CancelOrderDialog order={order} onClose={() => setCancelOpen(false)} onChanged={onChanged} /> : null}
+      </div>
+    );
+  }
+  const label = failed ? "Retry Supplier" : "Send to Supplier";
+  const disabled = cancelled || (!ready && !failed);
+  const tooltip = cancelled ? "Cancelled orders cannot be sent." : !ready && !failed ? `Missing ${orderListMissing(order).join(", ") || "readiness checks"}.` : label;
+  return (
+    <div className="flex w-[150px] flex-col items-stretch gap-2" data-row-interactive="true">
+      <Button
+        type="button"
+        size="sm"
+        className={actionButtonClass}
+        disabled={disabled}
+        title={tooltip}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (!disabled) setSendOpen(true);
+        }}
+      >
+        <HiOutlinePaperAirplane />
+        {label}
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        className={viewLabelClass}
+        disabled={!labelFile}
+        title={labelFile ? "View shipping label" : "No active shipping label"}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (labelFile) setLabelOpen(true);
+        }}
+      >
+        <HiOutlineEye />
+        View Label
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="danger"
+        className={actionButtonClass}
+        disabled={deleting}
+        title="Delete this local order"
+        onClick={(event) => {
+          event.stopPropagation();
+          void deleteLocalOrder();
+        }}
+      >
+        <HiOutlineTrash />
+        {deleting ? "Deleting" : "Delete"}
+      </Button>
+      {sendOpen ? <SendToSupplierDialog order={order} retry={failed} onClose={() => setSendOpen(false)} onChanged={onChanged} /> : null}
+      {labelOpen && labelFile ? <ShippingLabelPreviewDialog label={labelFile} onClose={() => setLabelOpen(false)} /> : null}
+    </div>
+  );
+}
+
+function ShippingLabelPreviewDialog({ label, onClose }: { label: ShippingLabel; onClose: () => void }) {
+  return (
+    <FilePreviewModal
+      file={{
+        id: label.id,
+        file_id: label.file_id,
+        storage_key: label.storage_key,
+        file_type: "shipping_label",
+        usage: "shipping_label",
+        sort_order: label.version,
+        is_selected: label.is_active,
+        original_name: label.original_name,
+        mime_type: label.mime_type || "application/octet-stream",
+        size: label.size,
+        created_at: label.uploaded_at,
+      }}
+      url={label.url}
+      itemReference={`Shipping label / Version ${label.version}`}
+      onClose={onClose}
+    />
   );
 }
 
@@ -315,36 +661,50 @@ function orderListMissing(order: Order) {
 }
 
 export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "design" | "mockup" }) {
-  const [preview, setPreview] = useState<OrderItemFile | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const usages = kind === "design" ? ["main_design"] : ["mockup", "mockup2"];
   const files =
     order.lines?.flatMap((line) =>
       line.items.flatMap((item) =>
         (item.files || [])
           .filter((file) => file.is_selected && usages.includes(file.usage || ""))
-          .map((file) => ({ ...file, itemNumber: item.item_number })),
+          .map((file) => ({ ...file, itemNumber: item.item_number, listingTitle: line.listing_title })),
       ),
     ) || [];
   const fallbackCount = kind === "design" ? order.designs_count : 0;
   const visible = files.slice(0, 4);
   const overflow = Math.max(0, files.length - visible.length);
+  const stopRowNavigation = (event: ReactMouseEvent | ReactKeyboardEvent) => {
+    event.stopPropagation();
+  };
   return (
     <>
-      <div className="flex min-w-[112px] items-center gap-1.5">
+      <div className="flex min-w-[112px] items-center gap-1.5" data-row-interactive="true" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         {visible.length ? (
-          visible.map((file) => (
+          visible.map((file, index) => (
             <button
               key={file.id}
+              ref={previewIndex === index ? triggerRef : undefined}
               type="button"
               className="flex h-10 w-10 items-center justify-center overflow-hidden rounded border border-border bg-white text-slate-500 hover:border-blue-700 hover:text-blue-700"
               aria-label={`Preview ${kind} for item ${file.itemNumber}`}
               title={`Item ${file.itemNumber}: ${file.original_name}`}
               onClick={(event) => {
                 event.stopPropagation();
-                setPreview(file);
+                triggerRef.current = event.currentTarget;
+                setPreviewIndex(index);
+              }}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  triggerRef.current = event.currentTarget;
+                  setPreviewIndex(index);
+                }
               }}
             >
-              <FileGlyph file={file} />
+              {file.url && file.mime_type.startsWith("image/") ? <img src={file.url} alt="" className="h-full w-full object-contain" /> : <FileGlyph file={file} />}
             </button>
           ))
         ) : fallbackCount ? (
@@ -356,23 +716,51 @@ export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "d
         )}
         {overflow ? <span className="text-xs font-semibold text-muted">+{overflow}</span> : null}
       </div>
-      {preview ? <FilePreviewModal file={preview} onClose={() => setPreview(null)} /> : null}
+      {previewIndex !== null ? (
+        <FilePreviewModal
+          file={files[previewIndex]}
+          url={files[previewIndex]?.url}
+          itemReference={`Item ${files[previewIndex]?.itemNumber}${files[previewIndex]?.listingTitle ? ` / ${files[previewIndex]?.listingTitle}` : ""}`}
+          hasPrevious={previewIndex > 0}
+          hasNext={previewIndex < files.length - 1}
+          onPrevious={() => setPreviewIndex((index) => (index === null ? index : Math.max(0, index - 1)))}
+          onNext={() => setPreviewIndex((index) => (index === null ? index : Math.min(files.length - 1, index + 1)))}
+          onClose={() => {
+            setPreviewIndex(null);
+            window.setTimeout(() => triggerRef.current?.focus(), 0);
+          }}
+        />
+      ) : null}
     </>
   );
 }
 
-export function CreateOrderForm() {
+function localDateTimeValue(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?: boolean; onCancel?: () => void; onCreated?: (order: Order) => void } = {}) {
   const navigate = useNavigate();
   const toast = useToast();
   const shops = useShops();
   const [serverError, setServerError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     etsy_order_id: "",
     shop_id: "",
-    ordered_at: "",
+    ordered_at: localDateTimeValue(),
     customer_name: "",
     customer_note: "",
   });
+  function validate() {
+    const errors: Record<string, string> = {};
+    if (!form.etsy_order_id.trim()) errors.etsy_order_id = "Etsy Order ID is required.";
+    if (!form.shop_id) errors.shop_id = "Shop is required.";
+    if (form.ordered_at && Number.isNaN(new Date(form.ordered_at).getTime())) errors.ordered_at = "Enter a valid date and time.";
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
   const create = useMutation({
     mutationFn: () =>
       orderApi.create({
@@ -383,18 +771,23 @@ export function CreateOrderForm() {
         customer_note: form.customer_note || undefined,
       }),
     onSuccess: (order) => {
-      toast.push({ type: "success", title: "Draft order created" });
-      navigate(`/app/orders/${order.id}`);
+      if (onCreated) onCreated(order);
+      else {
+        toast.push({ type: "success", title: "Order created" });
+        navigate(`/app/orders/${order.id}`);
+      }
     },
     onError: (error) => {
-      const message = apiMessage(error, "Unable to create order");
+      const duplicate = error instanceof ApiError && error.code === "DUPLICATE_ETSY_ORDER";
+      const message = duplicate ? "An order with this Etsy Order ID already exists in the selected shop." : apiMessage(error, "Unable to create order");
       setServerError(message);
       toast.push({ type: "error", title: "Create failed", message });
     },
   });
   const dirty = Boolean(form.etsy_order_id || form.shop_id || form.customer_name || form.customer_note || form.ordered_at);
-  return (
-    <div className="max-w-4xl space-y-5">
+  const content = (
+    <div className={clsx(!modal && "max-w-4xl", "space-y-5")}>
+      {!modal ? (
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <BackToOrders />
         <div className="flex items-center gap-2 text-sm text-muted">
@@ -402,17 +795,18 @@ export function CreateOrderForm() {
           {create.isPending ? "Saving" : dirty ? "Unsaved changes" : "Not started"}
         </div>
       </div>
+      ) : null}
       {serverError ? <ErrorState title="Save failed" message={serverError} /> : null}
-      <Card className="grid gap-4 p-5">
+      <div className="grid gap-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Etsy Order ID" error={serverError.includes("already exists") ? serverError : undefined}>
+          <Field label="Etsy Order ID" error={fieldErrors.etsy_order_id || (serverError.includes("already exists") ? serverError : undefined)}>
             <Input
               value={form.etsy_order_id}
               onChange={(event) => setForm((current) => ({ ...current, etsy_order_id: event.target.value }))}
               autoFocus
             />
           </Field>
-          <Field label="Shop">
+          <Field label="Shop" error={fieldErrors.shop_id}>
             <Select value={form.shop_id} onChange={(event) => setForm((current) => ({ ...current, shop_id: event.target.value }))}>
               <option value="">Select shop</option>
               {shops.data?.map((shop) => (
@@ -420,7 +814,7 @@ export function CreateOrderForm() {
               ))}
             </Select>
           </Field>
-          <Field label="Ordered At">
+          <Field label="Ordered At" error={fieldErrors.ordered_at}>
             <Input type="datetime-local" value={form.ordered_at} onChange={(event) => setForm((current) => ({ ...current, ordered_at: event.target.value }))} />
           </Field>
           <Field label="Customer Name">
@@ -428,16 +822,21 @@ export function CreateOrderForm() {
           </Field>
         </div>
         <Field label="Customer Note">
-          <Textarea value={form.customer_note} onChange={(event) => setForm((current) => ({ ...current, customer_note: event.target.value }))} />
+          <Textarea rows={3} className="min-h-[76px]" value={form.customer_note} onChange={(event) => setForm((current) => ({ ...current, customer_note: event.target.value }))} />
         </Field>
-        <div className="flex justify-end gap-2">
-          <Button disabled={create.isPending || !form.etsy_order_id.trim() || !form.shop_id} onClick={() => create.mutate()}>
-            {create.isPending ? <Spinner label="Saving" /> : "Save Draft"}
+        <div className={clsx("flex justify-end gap-2", modal && "sticky bottom-0 -mx-5 -mb-5 border-t border-border bg-surface px-5 py-4")}>
+          {modal ? <Button type="button" variant="secondary" disabled={create.isPending} onClick={onCancel}>Cancel</Button> : null}
+          <Button disabled={create.isPending} onClick={() => validate() && create.mutate()}>
+            {create.isPending ? <Spinner label="Creating" /> : "Create Order"}
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
+  if (modal) {
+    return <Modal title="Create Order" description="Start the order workspace with the intake fields." width="max-w-2xl" onClose={onCancel || (() => undefined)}>{content}</Modal>;
+  }
+  return content;
 }
 
 export function OrderHeader({
@@ -605,9 +1004,9 @@ export function WorkflowActionBar({
 }) {
   const toast = useToast();
   const actions = allowedWorkflowActions(order, isOwner);
-  const [confirm, setConfirm] = useState<WorkflowAction | null>(null);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const workflow = useMutation({
     mutationFn: async (action: WorkflowAction) => {
       await onBeforeAction?.();
@@ -622,23 +1021,20 @@ export function WorkflowActionBar({
           return orderApi.putOnHold(order.id);
         case "resume":
           return orderApi.resume(order.id);
-        case "cancel":
-          return orderApi.cancel(order.id);
         default:
           throw new Error("Use the dedicated dialog for this action.");
       }
     },
     onSuccess: async () => {
       await onChanged();
-      setConfirm(null);
       toast.push({ type: "success", title: "Order updated" });
     },
     onError: (error) => toast.push({ type: "error", title: "Action failed", message: apiMessage(error, "Unable to update workflow") }),
   });
   const button = (action: WorkflowAction, label: string, primary = false) =>
     actions.has(action) ? (
-      <Button key={action} type="button" variant={primary ? "primary" : "secondary"} disabled={workflow.isPending} onClick={() => setConfirm(action)}>
-        {label}
+      <Button key={action} type="button" variant={primary ? "primary" : "secondary"} disabled={workflow.isPending} onClick={() => action === "cancel" ? setCancelOpen(true) : workflow.mutate(action)}>
+        {workflow.isPending ? <Spinner label="Working" /> : label}
       </Button>
     ) : null;
   return (
@@ -654,21 +1050,12 @@ export function WorkflowActionBar({
           </Button>
         ) : null}
         {button("retry_supplier", "Retry Supplier", true)}
-        {button("put_on_hold", "Put on Hold")}
         {button("resume", "Resume")}
-        {button("cancel", "Cancel")}
+        {button("cancel", "Cancel Order")}
       </div>
-      <ConfirmDialog
-        open={Boolean(confirm)}
-        title="Confirm workflow action"
-        message="The backend will validate whether this workflow action is allowed."
-        confirmLabel={workflow.isPending ? "Working" : "Confirm"}
-        danger={confirm === "cancel"}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => confirm && workflow.mutate(confirm)}
-      />
       {revisionOpen ? <RequestRevisionDialog order={order} onClose={() => setRevisionOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
       {sendOpen ? <SendToSupplierDialog order={order} onClose={() => setSendOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
+      {cancelOpen ? <CancelOrderDialog order={order} onClose={() => setCancelOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
     </>
   );
 }
@@ -718,13 +1105,13 @@ function RequestRevisionDialog({ order, onClose, onChanged, onBeforeAction }: { 
   );
 }
 
-function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void> }) {
+function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction, retry = false }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void>; retry?: boolean }) {
   const toast = useToast();
   const label = activeShippingLabel(order);
   const mutation = useMutation({
     mutationFn: async () => {
       await onBeforeAction?.();
-      return orderApi.sendToSupplier(order.id);
+      return retry ? orderApi.retrySupplier(order.id) : orderApi.sendToSupplier(order.id);
     },
     onSuccess: async () => {
       await onChanged();
@@ -735,7 +1122,7 @@ function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction }: { o
   });
   const files = (order.lines || []).flatMap((line) => line.items.flatMap((item) => item.files || []));
   return (
-    <Modal title="Send to Supplier" description="This will create the production order in the supplier system." onClose={mutation.isPending ? () => undefined : onClose}>
+    <Modal title={retry ? "Retry Supplier" : "Send to Supplier"} description="This will create the production order in the supplier system." onClose={mutation.isPending ? () => undefined : onClose} width="max-w-2xl">
       <div className="grid gap-4">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
           <Info label="Etsy Order ID" value={order.etsy_order_id} />
@@ -752,7 +1139,57 @@ function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction }: { o
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancel</Button>
           <Button type="button" disabled={mutation.isPending || !order.readiness?.ready} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? <Spinner label="Submitting" /> : "Create supplier order"}
+            {mutation.isPending ? <Spinner label="Submitting" /> : "Create Supplier Order"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function CancelOrderDialog({ order, onClose, onChanged, onBeforeAction }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void> }) {
+  const toast = useToast();
+  const [reason, setReason] = useState("");
+  const [result, setResult] = useState<Order["supplier_cancellation"] | null>(null);
+  const supplierSubmitted = Boolean(order.supplier.order_id || order.submitted_at || order.status.code === orderStatusCodes.supplierSubmitted);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      await onBeforeAction?.();
+      return orderApi.cancel(order.id, { reason: reason || undefined });
+    },
+    onSuccess: async (updated) => {
+      setResult(updated.supplier_cancellation || null);
+      await onChanged();
+      toast.push({ type: "success", title: "Order cancelled successfully" });
+      if (!updated.supplier_cancellation?.refunded) onClose();
+    },
+    onError: (error) => toast.push({ type: "error", title: "Cancellation failed", message: apiMessage(error, "The order could not be cancelled") }),
+  });
+  return (
+    <Modal title="Cancel Order" description={supplierSubmitted ? "This order has already been sent to the supplier. A cancellation request will be sent to the supplier and may be rejected." : "This order has not been sent to the supplier. It will be marked as cancelled in this system."} onClose={mutation.isPending ? () => undefined : onClose} width="max-w-2xl">
+      <div className="grid gap-4">
+        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <Info label="Etsy Order ID" value={order.etsy_order_id} />
+          <Info label="Supplier Order ID" value={order.supplier.order_id || "-"} />
+          <Info label="Current Supplier Status" value={order.supplier.status || "Not submitted"} />
+          <Info label="Shop" value={order.shop.name} />
+        </dl>
+        <Field label="Cancellation reason">
+          <Textarea rows={2} className="min-h-[68px]" value={reason} onChange={(event) => setReason(event.target.value)} />
+        </Field>
+        {supplierSubmitted ? <ErrorState title="Supplier cancellation" message="The local order will not be marked cancelled unless the supplier accepts the cancellation." /> : null}
+        {result?.refunded ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+            <p className="font-semibold">Order cancelled successfully</p>
+            <p className="mt-2">Refunded: Items fee {result.refunded.items_fee || "-"} / Shipping fee {result.refunded.shipping_fee || "-"} / Total {result.refunded.total || "-"}</p>
+            <p className="mt-1">Current supplier balance: {result.current_balance || "-"}</p>
+            <p className="mt-1">Cancelled at: {result.canceled_at ? formatDateTime(result.canceled_at) : "-"}</p>
+          </div>
+        ) : null}
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-border bg-surface px-5 py-4">
+          <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Keep Order</Button>
+          <Button type="button" variant="danger" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+            {mutation.isPending ? <Spinner label="Cancelling" /> : "Cancel Order"}
           </Button>
         </div>
       </div>
@@ -1043,25 +1480,25 @@ function OrderItemAccordion({
         </div>
       </button>
       {open ? (
-        <div id={`order-item-panel-${item.id}`} className="grid gap-5 pb-5">
-          <div className="grid gap-5 xl:grid-cols-2">
-            <div className="grid gap-3 xl:border-r xl:border-border xl:pr-5">
+        <div id={`order-item-panel-${item.id}`} className="grid gap-4 pb-4">
+          <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-2.5 xl:border-r xl:border-border xl:pr-4">
               <SectionHeading title="Customer Information" />
               <Field label="Personalization Text">
-                <Textarea rows={2} className="min-h-16" placeholder="Enter personalization text" value={draft.personalization_text || ""} onChange={(event) => onDraftChange({ ...draft, personalization_text: event.target.value })} />
+                <Textarea rows={1} className="min-h-10 max-h-24 resize-y py-2" placeholder="Enter personalization text" value={draft.personalization_text || ""} onChange={(event) => onDraftChange({ ...draft, personalization_text: event.target.value })} />
               </Field>
               <Field label="Customer Note">
-                <Textarea rows={2} className="min-h-16" placeholder="Optional customer note" value={draft.customer_note || ""} onChange={(event) => onDraftChange({ ...draft, customer_note: event.target.value })} />
+                <Textarea rows={1} className="min-h-10 max-h-24 resize-y py-2" placeholder="Optional customer note" value={draft.customer_note || ""} onChange={(event) => onDraftChange({ ...draft, customer_note: event.target.value })} />
               </Field>
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
                 <ProductionFileSlot orderId={order.id} item={item} label="Customer Photos" fileType="customer_photo" usage={null} onChanged={onChanged} />
                 <ProductionFileSlot orderId={order.id} item={item} label="Customer References" fileType="customer_reference" usage={null} onChanged={onChanged} />
               </div>
             </div>
-            <div className="grid gap-3">
+            <div className="grid gap-2.5">
               <SectionHeading title="Production Configuration" />
-              <Info label="Supplier SKU" value={item.supplier_sku} />
-              <div id={`supplier-config-${item.id}`} className="grid gap-3 sm:grid-cols-2">
+              <div id={`supplier-config-${item.id}`} className="grid gap-2.5 md:grid-cols-3">
+                <Info label="Supplier SKU" value={item.supplier_sku} />
                 <VariantSelect label="Option" values={line.supplier.options} value={draft.option || ""} onChange={(value) => onDraftChange({ ...draft, option: value })} />
                 <VariantSelect label="Color" values={line.supplier.colors} value={draft.color || ""} onChange={(value) => onDraftChange({ ...draft, color: value })} />
                 <VariantSelect label="Print Method" values={line.supplier.print_methods} value={draft.print_method || ""} onChange={(value) => onDraftChange({ ...draft, print_method: value })} />
@@ -1295,11 +1732,29 @@ function FileGlyph({ file }: { file: Pick<OrderItemFile, "mime_type" | "original
   return <HiOutlineDocument className="h-6 w-6" />;
 }
 
-function FilePreviewModal({ file, url, onClose }: { file: OrderItemFile; url?: string; onClose: () => void }) {
+function FilePreviewModal({
+  file,
+  url,
+  itemReference,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext,
+  onClose,
+}: {
+  file: OrderItemFile;
+  url?: string;
+  itemReference?: string;
+  hasPrevious?: boolean;
+  hasNext?: boolean;
+  onPrevious?: () => void;
+  onNext?: () => void;
+  onClose: () => void;
+}) {
   const isImage = file.mime_type?.startsWith("image/");
   const isPdf = file.mime_type === "application/pdf" || file.original_name.toLowerCase().endsWith(".pdf");
   return (
-    <Modal title="File preview" onClose={onClose} width="max-w-xl">
+    <Modal title="File preview" onClose={onClose} width="max-w-3xl">
       <div className="grid gap-4">
         <div className="flex max-h-[70vh] min-h-64 items-center justify-center rounded border border-border bg-slate-50 text-slate-500">
           {url && isImage ? (
@@ -1315,9 +1770,19 @@ function FilePreviewModal({ file, url, onClose }: { file: OrderItemFile; url?: s
         </div>
         <div>
           <p className="font-semibold">{file.original_name}</p>
+          {itemReference ? <p className="text-sm text-muted">{itemReference}</p> : null}
           <p className="text-sm text-muted">{file.mime_type} / {formatFileSize(file.size)}</p>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap justify-between gap-2 border-t border-border bg-surface px-5 py-4">
+          <div className="flex gap-2">
+            {onPrevious || onNext ? (
+              <>
+                <Button type="button" variant="secondary" disabled={!hasPrevious} onClick={onPrevious}>Previous</Button>
+                <Button type="button" variant="secondary" disabled={!hasNext} onClick={onNext}>Next</Button>
+              </>
+            ) : null}
+          </div>
+          <div className="flex gap-2">
           <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
           <a
             className={clsx(
@@ -1332,6 +1797,7 @@ function FilePreviewModal({ file, url, onClose }: { file: OrderItemFile; url?: s
             <HiOutlineArrowDownTray />
             Download
           </a>
+          </div>
         </div>
       </div>
     </Modal>

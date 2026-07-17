@@ -5,6 +5,7 @@ import {
   allowedWorkflowActions,
   itemProductionComplete,
   listingSupplierReady,
+  orderStatusAccent,
   readinessProgress,
 } from "./orderUtils";
 
@@ -84,5 +85,18 @@ describe("order utilities", () => {
     };
     expect(activeShippingLabel(order)?.original_name).toBe("label.pdf");
     expect(allowedWorkflowActions(order, false).has("submit_for_review")).toBe(true);
+  });
+
+  it("centralizes subtle order row status accents", () => {
+    expect(orderStatusAccent({ id: "status-2", name: "Ready", code: "ready_to_send" }).marker).toBe("bg-blue-500");
+    expect(orderStatusAccent({ id: "status-3", name: "Cancelled", code: "cancelled" }).row).toContain("bg-slate");
+  });
+
+  it("does not expose workflow actions for cancelled orders", () => {
+    const order = {
+      ...baseOrder,
+      status: { id: "status-3", name: "Cancelled", code: "cancelled" },
+    };
+    expect(allowedWorkflowActions(order, true).size).toBe(0);
   });
 });

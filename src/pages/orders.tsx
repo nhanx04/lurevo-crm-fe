@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useBeforeUnload, useParams } from "react-router-dom";
+import { useBeforeUnload, useNavigate, useParams } from "react-router-dom";
 import { HiOutlinePlus } from "react-icons/hi2";
 import { useMutation } from "@tanstack/react-query";
 import { orderApi } from "@/api/services";
@@ -27,6 +27,9 @@ export function OrdersPage() {
   const { params, setParam, setPage } = useUrlParams();
   const [search, setSearch] = useState(params.search || "");
   const statuses = useWorkflowStatuses();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [createOpen, setCreateOpen] = useState(false);
   const listParams = useMemo<OrderParams>(
     () => ({
       page: Number(params.page || 1),
@@ -55,12 +58,10 @@ export function OrdersPage() {
             {orders.data?.pagination.total_items ? `${orders.data.pagination.total_items} total orders` : "Operational order intake"}
           </p>
         </div>
-        <Link to="/app/orders/new">
-          <Button className="w-full sm:w-auto">
+        <Button className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
             <HiOutlinePlus />
             Create Order
           </Button>
-        </Link>
       </div>
       <OrdersQuickViews params={params} statuses={statuses.data?.data || []} setParam={setParam} />
       <OrderFilters params={params} search={search} setSearch={setSearch} setParam={setParam} reset={reset} />
@@ -74,6 +75,17 @@ export function OrdersPage() {
         totalItems={orders.data?.pagination.total_items || 0}
         onPage={setPage}
       />
+      {createOpen ? (
+        <CreateOrderForm
+          modal
+          onCancel={() => setCreateOpen(false)}
+          onCreated={(created) => {
+            setCreateOpen(false);
+            toast.push({ type: "success", title: "Order created" });
+            navigate(`/app/orders/${created.id}`);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   HiOutlineArrowLeftOnRectangle,
@@ -341,23 +342,46 @@ export function Modal({
   description?: string;
   width?: string;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
+      if (event.key === "Tab") {
+        const focusable = panelRef.current?.querySelectorAll<HTMLElement>(
+          'button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])',
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    window.setTimeout(() => panelRef.current?.querySelector<HTMLElement>("[autofocus],button,input,select,textarea")?.focus(), 0);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-3"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3"
       role="dialog"
       aria-modal="true"
     >
       <div
+        ref={panelRef}
         className={clsx(
-          "max-h-[92vh] w-full overflow-hidden rounded-[18px] border border-border bg-surface shadow-soft",
+          "flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-soft",
           width,
         )}
       >
@@ -376,10 +400,11 @@ export function Modal({
             <HiOutlineXMark className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[calc(92vh-74px)] overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

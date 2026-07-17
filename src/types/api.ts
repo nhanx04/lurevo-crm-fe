@@ -313,6 +313,7 @@ export type Order = {
   shipping_labels?: ShippingLabel[];
   active_shipping_label?: ShippingLabel | null;
   activities?: OrderActivity[];
+  supplier_cancellation?: SupplierCancellationResult | null;
   submitted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -345,6 +346,21 @@ export type SupplierSubmission = {
   created_at: string;
   updated_at: string;
   submitted_at?: string | null;
+};
+
+export type SupplierCancellationRefund = {
+  items_fee: string;
+  shipping_fee: string;
+  total: string;
+};
+
+export type SupplierCancellationResult = {
+  supplier_order_id?: string | null;
+  customer_order_id: string;
+  supplier_status?: string | null;
+  refunded?: SupplierCancellationRefund | null;
+  current_balance?: string | null;
+  canceled_at?: string | null;
 };
 
 export type ListParams = {

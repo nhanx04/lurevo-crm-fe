@@ -81,6 +81,7 @@ export const orderApi = {
   detail: (id: string) => apiGet<Order>(`/orders/${id}`),
   create: (body: OrderRequest) => apiPost<Order>('/orders', body),
   update: (id: string, body: OrderRequest) => apiPatch<Order>(`/orders/${id}`, body),
+  remove: (id: string) => apiDelete(`/orders/${id}`),
   addLine: (orderId: string, body: { listing_id: string; quantity: number; personalization_mode: 'same' | 'different' }) =>
     apiPost<OrderLine>(`/orders/${orderId}/lines`, body),
   deleteLine: (orderId: string, lineId: string) => apiDelete(`/orders/${orderId}/lines/${lineId}`),
@@ -122,7 +123,7 @@ export const orderApi = {
   markReady: (orderId: string) => apiPost<Order>(`/orders/${orderId}/mark-ready`, {}),
   sendToSupplier: (orderId: string) => apiPost<SupplierSubmission>(`/orders/${orderId}/send-to-supplier`, {}),
   retrySupplier: (orderId: string) => apiPost<SupplierSubmission>(`/orders/${orderId}/retry-supplier`, {}),
-  cancel: (orderId: string, body?: { note?: string }) => apiPost<Order>(`/orders/${orderId}/cancel`, body || {}),
+  cancel: (orderId: string, body?: { reason?: string }) => apiPost<Order>(`/orders/${orderId}/cancel`, body || {}),
   putOnHold: (orderId: string, body?: { note?: string }) => apiPost<Order>(`/orders/${orderId}/put-on-hold`, body || {}),
   resume: (orderId: string) => apiPost<Order>(`/orders/${orderId}/resume`, {}),
 };

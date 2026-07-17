@@ -84,6 +84,32 @@ const order: Order = {
             },
           ],
         },
+        {
+          id: "item-2",
+          order_line_id: "line-1",
+          item_number: 2,
+          quantity: 2,
+          supplier_sku: "SUP-DCS",
+          option: "Decanter",
+          color: "Blue",
+          print_method: "UV Print",
+          main_position: "Back",
+          files: [
+            {
+              id: "file-3",
+              file_id: "asset-3",
+              file_type: "design",
+              usage: "main_design",
+              position: "Back",
+              sort_order: 1,
+              is_selected: true,
+              original_name: "main-2.png",
+              mime_type: "image/png",
+              size: 1000,
+              created_at: "2026-07-16T10:00:00Z",
+            },
+          ],
+        },
       ],
     },
   ],
@@ -115,11 +141,23 @@ describe("order components", () => {
     );
     expect(screen.getByText("ORD-2024-005")).toBeInTheDocument();
     expect(screen.getByText("Lurevo US")).toBeInTheDocument();
-    expect(screen.getByText(/2 products \/ 3 items \/ Qty 1/)).toBeInTheDocument();
-    expect(screen.getByText("Design Preview")).toBeInTheDocument();
-    expect(screen.getByText("Mockup Preview")).toBeInTheDocument();
+    expect(screen.getByText(/2 products \/ 3 items \/ Qty 3/)).toBeInTheDocument();
+    expect(screen.getByText("Product and Configuration")).toBeInTheDocument();
+    expect(screen.getByText("Design")).toBeInTheDocument();
+    expect(screen.getByText("Mockup")).toBeInTheDocument();
     expect(screen.queryByText("Created By")).not.toBeInTheDocument();
+    expect(screen.getAllByText("DCS301S Decanter")).toHaveLength(2);
+    expect(screen.getByText("Item 1 / Decanter / Clear")).toBeInTheDocument();
+    expect(screen.getByText("Item 2 / Decanter / Blue")).toBeInTheDocument();
+    expect(screen.getByText("UV Print / Front")).toBeInTheDocument();
+    expect(screen.getByText("UV Print / Back")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getAllByText("Draft")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Send to Supplier/i })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Delete/i })).toHaveLength(1);
     expect(screen.getByLabelText("Preview design for item 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Preview design for item 2")).toBeInTheDocument();
     expect(screen.getByLabelText("Preview mockup for item 1")).toBeInTheDocument();
   });
 

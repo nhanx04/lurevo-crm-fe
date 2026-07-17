@@ -1,5 +1,7 @@
 import { createContext, ReactNode, useCallback, useContext, useMemo, useState } from 'react';
 import { HiOutlineCheckCircle, HiOutlineExclamationTriangle, HiOutlineInformationCircle, HiOutlineXMark } from 'react-icons/hi2';
+import { Modal } from './layout';
+import { Button } from './ui';
 
 type ToastType = 'success' | 'error' | 'info';
 type Toast = { id: string; type: ToastType; title: string; message?: string };
@@ -114,19 +116,14 @@ export function ConfirmDialog({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-soft">
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <p className="mt-2 text-sm text-muted">{message}</p>
-        <div className="mt-6 flex justify-end gap-3">
-          <button className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-slate-50" onClick={onClose}>
-            Cancel
-          </button>
-          <button className={`rounded-md px-4 py-2 text-sm font-semibold text-white ${danger ? 'bg-danger hover:bg-red-700' : 'bg-primary hover:bg-blue-800'}`} onClick={onConfirm}>
-            {confirmLabel}
-          </button>
+    <Modal title={title} onClose={onClose} width="max-w-lg">
+      <div className="grid gap-5">
+        <p className="text-sm text-muted">{message}</p>
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-3 border-t border-border bg-surface px-5 py-4">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="button" variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
