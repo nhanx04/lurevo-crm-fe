@@ -1,6 +1,15 @@
-import { ChangeEvent, DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode, useEffect, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  DragEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HiOutlineArrowLeft,
   HiOutlineArrowDownTray,
@@ -11,6 +20,7 @@ import {
   HiOutlineDocument,
   HiOutlineEye,
   HiOutlineExclamationTriangle,
+  HiOutlineLink,
   HiOutlineMagnifyingGlass,
   HiOutlinePaperAirplane,
   HiOutlinePhoto,
@@ -19,8 +29,13 @@ import {
 } from "react-icons/hi2";
 import clsx from "clsx";
 import { queryKeys } from "@/api/queryKeys";
-import { categoryApi, orderApi } from "@/api/services";
-import { useListingSelector, useOrderActivities, useShops, useWorkflowStatuses } from "./hooks";
+import { categoryApi, imageApi, orderApi } from "@/api/services";
+import {
+  useListingSelector,
+  useOrderActivities,
+  useShops,
+  useWorkflowStatuses,
+} from "./hooks";
 import type {
   Listing,
   Order,
@@ -44,7 +59,14 @@ import {
   Table,
   Textarea,
 } from "@/components/ui";
-import { ConfirmDialog, EmptyState, ErrorState, SkeletonRows, Spinner, useToast } from "@/components/feedback";
+import {
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  SkeletonRows,
+  Spinner,
+  useToast,
+} from "@/components/feedback";
 import { Modal } from "@/components/layout";
 import { formatDateTime, formatFileSize } from "@/utils/format";
 import {
@@ -68,7 +90,10 @@ import {
 export function OrderStatusBadge({ status }: { status: Order["status"] }) {
   return (
     <Badge tone="neutral">
-      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColor(status) }} />
+      <span
+        className="h-2 w-2 rounded-full"
+        style={{ backgroundColor: statusColor(status) }}
+      />
       {status.name}
     </Badge>
   );
@@ -79,7 +104,9 @@ export function SupplierStatusBadge({ status }: { status?: string | null }) {
   const tone =
     normalized.includes("error") || normalized.includes("failed")
       ? "danger"
-      : normalized.includes("success") || normalized.includes("created") || normalized.includes("submitted")
+      : normalized.includes("success") ||
+          normalized.includes("created") ||
+          normalized.includes("submitted")
         ? "success"
         : normalized.includes("pending") || normalized.includes("processing")
           ? "warning"
@@ -100,28 +127,54 @@ export function OrdersQuickViews({
   const views = [
     { label: "All", statusCode: "", readiness: "" },
     { label: "Draft", statusCode: orderStatusCodes.draft, readiness: "" },
-    { label: "Awaiting Review", statusCode: orderStatusCodes.awaitingReview, readiness: "" },
-    { label: "Needs Revision", statusCode: orderStatusCodes.needsRevision, readiness: "" },
+    {
+      label: "Awaiting Review",
+      statusCode: orderStatusCodes.awaitingReview,
+      readiness: "",
+    },
+    {
+      label: "Needs Revision",
+      statusCode: orderStatusCodes.needsRevision,
+      readiness: "",
+    },
     { label: "Missing Design", statusCode: "", readiness: "missing_design" },
     { label: "Missing Label", statusCode: "", readiness: "missing_label" },
-    { label: "Missing Configuration", statusCode: "", readiness: "missing_configuration" },
-    { label: "Ready to Send", statusCode: orderStatusCodes.readyToSend, readiness: "" },
-    { label: "Supplier Error", statusCode: orderStatusCodes.supplierError, readiness: "" },
+    {
+      label: "Missing Configuration",
+      statusCode: "",
+      readiness: "missing_configuration",
+    },
+    {
+      label: "Ready to Send",
+      statusCode: orderStatusCodes.readyToSend,
+      readiness: "",
+    },
+    {
+      label: "Supplier Error",
+      statusCode: orderStatusCodes.supplierError,
+      readiness: "",
+    },
   ];
   return (
     <div className="flex flex-wrap gap-2">
       {views.map((view) => {
-        const status = view.statusCode ? statusByCode.get(view.statusCode) : undefined;
+        const status = view.statusCode
+          ? statusByCode.get(view.statusCode)
+          : undefined;
         const active =
           (view.readiness && params.readiness === view.readiness) ||
-          (!view.readiness && (params.status_id || "") === (status?.id || "") && (view.statusCode || params.readiness ? !params.readiness : true));
+          (!view.readiness &&
+            (params.status_id || "") === (status?.id || "") &&
+            (view.statusCode || params.readiness ? !params.readiness : true));
         return (
           <button
             key={`${view.label}-${view.statusCode}-${view.readiness}`}
             type="button"
             className={clsx(
               "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-              active ? "border-blue-900 bg-blue-900 text-white" : "border-border bg-white text-slate-700 hover:bg-slate-50",
+              active
+                ? "border-blue-900 bg-blue-900 text-white"
+                : "border-border bg-white text-slate-700 hover:bg-slate-50",
             )}
             onClick={() => {
               setParam("page", "");
@@ -161,8 +214,15 @@ export function OrderFilters({
 
   return (
     <div className="grid gap-2 xl:grid-cols-[minmax(240px,1fr)_180px_210px_170px_170px_auto]">
-      <SearchInput placeholder="Search order ID, customer, or SKU..." value={search} onChange={(event) => setSearch(event.target.value)} />
-      <Select value={params.shop_id || ""} onChange={(event) => setParam("shop_id", event.target.value)}>
+      <SearchInput
+        placeholder="Search order ID, customer, or SKU..."
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      <Select
+        value={params.shop_id || ""}
+        onChange={(event) => setParam("shop_id", event.target.value)}
+      >
         <option value="">All shops</option>
         {shops.data?.map((shop) => (
           <option key={shop.id} value={shop.id}>
@@ -170,7 +230,10 @@ export function OrderFilters({
           </option>
         ))}
       </Select>
-      <Select value={params.status_id || ""} onChange={(event) => setParam("status_id", event.target.value)}>
+      <Select
+        value={params.status_id || ""}
+        onChange={(event) => setParam("status_id", event.target.value)}
+      >
         <option value="">All workflow statuses</option>
         {statuses.data?.data.map((status) => (
           <option key={status.id} value={status.id}>
@@ -178,14 +241,20 @@ export function OrderFilters({
           </option>
         ))}
       </Select>
-      <Select value={params.supplier_status || ""} onChange={(event) => setParam("supplier_status", event.target.value)}>
+      <Select
+        value={params.supplier_status || ""}
+        onChange={(event) => setParam("supplier_status", event.target.value)}
+      >
         <option value="">Supplier status</option>
         <option value="pending">Pending</option>
         <option value="processing">Processing</option>
         <option value="success">Created</option>
         <option value="failed">Error</option>
       </Select>
-      <Select value={params.readiness || ""} onChange={(event) => setParam("readiness", event.target.value)}>
+      <Select
+        value={params.readiness || ""}
+        onChange={(event) => setParam("readiness", event.target.value)}
+      >
         <option value="">All readiness</option>
         <option value="missing_label">Missing label</option>
         <option value="missing_design">Missing design</option>
@@ -222,9 +291,15 @@ export function OrdersTable({
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
   const openOrder = (orderId: string) => navigate(`/app/orders/${orderId}`);
   if (loading) return <SkeletonRows rows={8} />;
-  if (error) return <ErrorState message="Could not load orders." onRetry={onRetry} />;
+  if (error)
+    return <ErrorState message="Could not load orders." onRetry={onRetry} />;
   if (!orders?.length) {
-    return <EmptyState title="No orders found." message="Create your first order to begin processing Etsy purchases." />;
+    return (
+      <EmptyState
+        title="No orders found."
+        message="Create your first order to begin processing Etsy purchases."
+      />
+    );
   }
   return (
     <>
@@ -255,7 +330,12 @@ export function OrdersTable({
           ))}
         </tbody>
       </Table>
-      <PaginationControls page={page} totalPages={totalPages} totalItems={totalItems} onPage={onPage} />
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        totalItems={totalItems}
+        onPage={onPage}
+      />
     </>
   );
 }
@@ -284,7 +364,8 @@ function OrderTableGroup({
   const [expanded, setExpanded] = useState(false);
   const allItems = orderTableItems(order);
   const hasMore = allItems.length > COLLAPSED_ITEM_LIMIT;
-  const visibleItems = expanded || !hasMore ? allItems : allItems.slice(0, COLLAPSED_ITEM_LIMIT);
+  const visibleItems =
+    expanded || !hasMore ? allItems : allItems.slice(0, COLLAPSED_ITEM_LIMIT);
   const rowSpan = visibleItems.length + (hasMore ? 1 : 0);
   const accent = orderStatusAccent(order.status);
   const groupClass = clsx(
@@ -306,7 +387,12 @@ function OrderTableGroup({
         <tr
           key={entry.key}
           tabIndex={0}
-          className={clsx(groupClass, index === 0 ? "border-t-2 border-slate-200" : "border-t border-slate-100")}
+          className={clsx(
+            groupClass,
+            index === 0
+              ? "border-t-2 border-slate-200"
+              : "border-t border-slate-100",
+          )}
           onClick={openFromRow}
           onKeyDown={openFromRow}
           onMouseEnter={() => onHover(true)}
@@ -314,10 +400,19 @@ function OrderTableGroup({
         >
           {index === 0 ? (
             <>
-              <OrderMetadataCell order={order} accent={accent.marker} rowSpan={rowSpan} />
-              <td rowSpan={rowSpan} className="min-w-[150px] px-4 py-4 align-top">
+              <OrderMetadataCell
+                order={order}
+                accent={accent.marker}
+                rowSpan={rowSpan}
+              />
+              <td
+                rowSpan={rowSpan}
+                className="min-w-[150px] px-4 py-4 align-top"
+              >
                 <p className="font-semibold">{order.shop.name}</p>
-                <p className="mt-1 text-xs text-muted">{order.customer_name || "No customer"}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {order.customer_name || "No customer"}
+                </p>
               </td>
             </>
           ) : null}
@@ -328,11 +423,17 @@ function OrderTableGroup({
           <td className="px-4 py-3 align-middle">
             <ItemMockupPreview entry={entry} />
           </td>
-          <td className="px-4 py-3 text-sm font-semibold align-middle">{entry.item?.quantity || 0}</td>
+          <td className="px-4 py-3 text-sm font-semibold align-middle">
+            {entry.item?.quantity || 0}
+          </td>
           {index === 0 ? (
             <>
-              <td rowSpan={rowSpan} className="px-4 py-4 align-top"><OrderStatusBadge status={order.status} /></td>
-              <td rowSpan={rowSpan} className="px-4 py-4 align-top"><SupplierStatusBadge status={order.supplier.status} /></td>
+              <td rowSpan={rowSpan} className="px-4 py-4 align-top">
+                <OrderStatusBadge status={order.status} />
+              </td>
+              <td rowSpan={rowSpan} className="px-4 py-4 align-top">
+                <SupplierStatusBadge status={order.supplier.status} />
+              </td>
               <td rowSpan={rowSpan} className="px-4 py-4 text-right align-top">
                 <SupplierTableAction order={order} onChanged={onChanged} />
               </td>
@@ -357,7 +458,9 @@ function OrderTableGroup({
                 setExpanded((value) => !value);
               }}
             >
-              {expanded ? "Collapse items" : `Show ${allItems.length - COLLAPSED_ITEM_LIMIT} more items`}
+              {expanded
+                ? "Collapse items"
+                : `Show ${allItems.length - COLLAPSED_ITEM_LIMIT} more items`}
             </button>
           </td>
         </tr>
@@ -366,10 +469,26 @@ function OrderTableGroup({
   );
 }
 
-function OrderMetadataCell({ order, accent, rowSpan }: { order: Order; accent: string; rowSpan: number }) {
+function OrderMetadataCell({
+  order,
+  accent,
+  rowSpan,
+}: {
+  order: Order;
+  accent: string;
+  rowSpan: number;
+}) {
   return (
-    <td rowSpan={rowSpan} className="relative min-w-[150px] px-4 py-4 align-top">
-      <span className={clsx("absolute inset-y-2 left-0 w-1 rounded-r-full opacity-80", accent)} />
+    <td
+      rowSpan={rowSpan}
+      className="relative min-w-[150px] px-4 py-4 align-top"
+    >
+      <span
+        className={clsx(
+          "absolute inset-y-2 left-0 w-1 rounded-r-full opacity-80",
+          accent,
+        )}
+      />
       <Link
         to={`/app/orders/${order.id}`}
         onClick={(event) => event.stopPropagation()}
@@ -377,9 +496,12 @@ function OrderMetadataCell({ order, accent, rowSpan }: { order: Order; accent: s
       >
         {order.etsy_order_id}
       </Link>
-      <p className="mt-1 text-xs text-muted">{formatDateTime(order.ordered_at || order.created_at)}</p>
+      <p className="mt-1 text-xs text-muted">
+        {formatDateTime(order.ordered_at || order.created_at)}
+      </p>
       <p className="mt-2 text-xs font-semibold text-slate-600">
-        {order.products_count} products / {order.items_count} items / Qty {orderTotalQuantity(order) || order.items_count}
+        {order.products_count} products / {order.items_count} items / Qty{" "}
+        {orderTotalQuantity(order) || order.items_count}
       </p>
     </td>
   );
@@ -390,19 +512,32 @@ function ItemProductCell({ entry }: { entry: OrderTableItem }) {
     return (
       <td className="min-w-[300px] px-4 py-3 align-middle">
         <p className="font-semibold text-slate-700">No items added</p>
-        <p className="mt-1 text-xs text-muted">Add a listing in the order workspace.</p>
+        <p className="mt-1 text-xs text-muted">
+          Add a listing in the order workspace.
+        </p>
       </td>
     );
   }
   const item = entry.item;
   const line = entry.line;
-  const optionColor = [item.option || "Option missing", item.color || "Color missing"].join(" / ");
-  const methodPosition = [item.print_method || "Print method missing", item.main_position || "Position missing"].join(" / ");
+  const optionColor = [
+    item.option || "Option missing",
+    item.color || "Color missing",
+  ].join(" / ");
+  const methodPosition = [
+    item.print_method || "Print method missing",
+    item.main_position || "Position missing",
+  ].join(" / ");
   return (
     <td className="min-w-[320px] px-4 py-3 align-middle">
       <p className="font-semibold text-foreground">{line.listing_title}</p>
-      <p className="mt-1 text-xs text-muted">{[line.listing_sku, item.supplier_sku].filter(Boolean).join(" / ") || "SKU missing"}</p>
-      <p className="mt-2 text-xs font-medium text-slate-700">Item {item.item_number} / {optionColor}</p>
+      <p className="mt-1 text-xs text-muted">
+        {[line.listing_sku, item.supplier_sku].filter(Boolean).join(" / ") ||
+          "SKU missing"}
+      </p>
+      <p className="mt-2 text-xs font-medium text-slate-700">
+        Item {item.item_number} / {optionColor}
+      </p>
       <p className="mt-1 text-xs text-muted">{methodPosition}</p>
     </td>
   );
@@ -451,7 +586,10 @@ function ItemFilePreview({
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   if (!files.length) {
     return (
-      <span className="flex h-11 w-11 items-center justify-center rounded border border-dashed border-border bg-slate-50 text-slate-400" title={placeholder}>
+      <span
+        className="flex h-11 w-11 items-center justify-center rounded border border-dashed border-border bg-slate-50 text-slate-400"
+        title={placeholder}
+      >
         <HiOutlinePhoto className="h-5 w-5" />
       </span>
     );
@@ -470,9 +608,17 @@ function ItemFilePreview({
           setPreviewIndex(0);
         }}
       >
-        {file.url && file.mime_type.startsWith("image/") ? <img src={file.url} alt="" className="h-full w-full object-contain" /> : <FileGlyph file={file} />}
+        {file.url && file.mime_type.startsWith("image/") ? (
+          <img src={file.url} alt="" className="h-full w-full object-contain" />
+        ) : (
+          <FileGlyph file={file} />
+        )}
       </button>
-      {indicator ? <span className="absolute -right-2 -top-2 rounded-full bg-blue-700 px-1.5 py-0.5 text-[10px] font-bold text-white">{indicator}</span> : null}
+      {indicator ? (
+        <span className="absolute -right-2 -top-2 rounded-full bg-blue-700 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          {indicator}
+        </span>
+      ) : null}
       {previewIndex !== null ? (
         <FilePreviewModal
           file={files[previewIndex]}
@@ -480,8 +626,16 @@ function ItemFilePreview({
           itemReference={itemReference}
           hasPrevious={previewIndex > 0}
           hasNext={previewIndex < files.length - 1}
-          onPrevious={() => setPreviewIndex((index) => (index === null ? index : Math.max(0, index - 1)))}
-          onNext={() => setPreviewIndex((index) => (index === null ? index : Math.min(files.length - 1, index + 1)))}
+          onPrevious={() =>
+            setPreviewIndex((index) =>
+              index === null ? index : Math.max(0, index - 1),
+            )
+          }
+          onNext={() =>
+            setPreviewIndex((index) =>
+              index === null ? index : Math.min(files.length - 1, index + 1),
+            )
+          }
           onClose={() => {
             setPreviewIndex(null);
             window.setTimeout(() => triggerRef.current?.focus(), 0);
@@ -493,14 +647,18 @@ function ItemFilePreview({
 }
 
 function orderTableItems(order: Order): OrderTableItem[] {
-  const items = (order.lines || []).flatMap((line) => line.items.map((item) => ({ key: item.id, line, item })));
+  const items = (order.lines || []).flatMap((line) =>
+    line.items.map((item) => ({ key: item.id, line, item })),
+  );
   return items.length ? items : [{ key: `${order.id}-empty` }];
 }
 
 function selectedFiles(item: OrderItem | undefined, usages: string[]) {
   if (!item) return [];
   return usages
-    .map((usage) => item.files?.find((file) => file.usage === usage && file.is_selected))
+    .map((usage) =>
+      item.files?.find((file) => file.usage === usage && file.is_selected),
+    )
     .filter((file): file is OrderItemFile => Boolean(file));
 }
 
@@ -510,10 +668,23 @@ function itemReference(entry: OrderTableItem) {
 }
 
 function isRowInteractive(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest("button,a,input,select,textarea,[data-row-interactive='true']"));
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        "button,a,input,select,textarea,[data-row-interactive='true']",
+      ),
+    )
+  );
 }
 
-function SupplierTableAction({ order, onChanged }: { order: Order; onChanged: () => void }) {
+function SupplierTableAction({
+  order,
+  onChanged,
+}: {
+  order: Order;
+  onChanged: () => void;
+}) {
   const toast = useToast();
   const [sendOpen, setSendOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -526,21 +697,36 @@ function SupplierTableAction({ order, onChanged }: { order: Order; onChanged: ()
       toast.push({ type: "success", title: "Order deleted" });
       await onChanged();
     } catch (error) {
-      toast.push({ type: "error", title: "Delete failed", message: apiMessage(error, "Unable to delete order") });
+      toast.push({
+        type: "error",
+        title: "Delete failed",
+        message: apiMessage(error, "Unable to delete order"),
+      });
     } finally {
       setDeleting(false);
     }
   }
-  const ready = Boolean(order.readiness?.ready) || (!orderListMissing(order).length && order.status.code === orderStatusCodes.readyToSend);
-  const submitted = order.status.code === orderStatusCodes.supplierSubmitted || Boolean(order.supplier.order_id);
+  const ready =
+    Boolean(order.readiness?.ready) ||
+    (!orderListMissing(order).length &&
+      order.status.code === orderStatusCodes.readyToSend);
+  const submitted =
+    order.status.code === orderStatusCodes.supplierSubmitted ||
+    Boolean(order.supplier.order_id);
   const cancelled = order.status.code === orderStatusCodes.cancelled;
-  const failed = order.status.code === orderStatusCodes.supplierError || order.supplier.status?.toLowerCase().includes("failed");
+  const failed =
+    order.status.code === orderStatusCodes.supplierError ||
+    order.supplier.status?.toLowerCase().includes("failed");
   const labelFile = activeShippingLabel(order);
   const actionButtonClass = "w-[150px]";
-  const viewLabelClass = "w-[150px] border-green-600 bg-green-600 text-white hover:bg-green-700";
+  const viewLabelClass =
+    "w-[150px] !border-green-600 !bg-green-600 !text-white hover:!bg-green-700";
   if (submitted) {
     return (
-      <div className="flex w-[150px] flex-col items-stretch gap-2" data-row-interactive="true">
+      <div
+        className="flex w-[150px] flex-col items-stretch gap-2"
+        data-row-interactive="true"
+      >
         <Button
           type="button"
           size="sm"
@@ -568,16 +754,34 @@ function SupplierTableAction({ order, onChanged }: { order: Order; onChanged: ()
         >
           Cancel Order
         </Button>
-        {labelOpen && labelFile ? <ShippingLabelPreviewDialog label={labelFile} onClose={() => setLabelOpen(false)} /> : null}
-        {cancelOpen ? <CancelOrderDialog order={order} onClose={() => setCancelOpen(false)} onChanged={onChanged} /> : null}
+        {labelOpen && labelFile ? (
+          <ShippingLabelPreviewDialog
+            label={labelFile}
+            onClose={() => setLabelOpen(false)}
+          />
+        ) : null}
+        {cancelOpen ? (
+          <CancelOrderDialog
+            order={order}
+            onClose={() => setCancelOpen(false)}
+            onChanged={onChanged}
+          />
+        ) : null}
       </div>
     );
   }
   const label = failed ? "Retry Supplier" : "Send to Supplier";
   const disabled = cancelled || (!ready && !failed);
-  const tooltip = cancelled ? "Cancelled orders cannot be sent." : !ready && !failed ? `Missing ${orderListMissing(order).join(", ") || "readiness checks"}.` : label;
+  const tooltip = cancelled
+    ? "Cancelled orders cannot be sent."
+    : !ready && !failed
+      ? `Missing ${orderListMissing(order).join(", ") || "readiness checks"}.`
+      : label;
   return (
-    <div className="flex w-[150px] flex-col items-stretch gap-2" data-row-interactive="true">
+    <div
+      className="flex w-[150px] flex-col items-stretch gap-2"
+      data-row-interactive="true"
+    >
       <Button
         type="button"
         size="sm"
@@ -622,13 +826,31 @@ function SupplierTableAction({ order, onChanged }: { order: Order; onChanged: ()
         <HiOutlineTrash />
         {deleting ? "Deleting" : "Delete"}
       </Button>
-      {sendOpen ? <SendToSupplierDialog order={order} retry={failed} onClose={() => setSendOpen(false)} onChanged={onChanged} /> : null}
-      {labelOpen && labelFile ? <ShippingLabelPreviewDialog label={labelFile} onClose={() => setLabelOpen(false)} /> : null}
+      {sendOpen ? (
+        <SendToSupplierDialog
+          order={order}
+          retry={failed}
+          onClose={() => setSendOpen(false)}
+          onChanged={onChanged}
+        />
+      ) : null}
+      {labelOpen && labelFile ? (
+        <ShippingLabelPreviewDialog
+          label={labelFile}
+          onClose={() => setLabelOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ShippingLabelPreviewDialog({ label, onClose }: { label: ShippingLabel; onClose: () => void }) {
+function ShippingLabelPreviewDialog({
+  label,
+  onClose,
+}: {
+  label: ShippingLabel;
+  onClose: () => void;
+}) {
   return (
     <FilePreviewModal
       file={{
@@ -655,13 +877,23 @@ function orderListMissing(order: Order) {
   const missing: string[] = [];
   if (!order.has_active_shipping_label) missing.push("label");
   const missingDesigns = Math.max(0, order.items_count - order.designs_count);
-  if (missingDesigns) missing.push(`${missingDesigns} design${missingDesigns === 1 ? "" : "s"}`);
-  const missingConfig = Math.max(0, order.items_count - order.configured_items_count);
+  if (missingDesigns)
+    missing.push(`${missingDesigns} design${missingDesigns === 1 ? "" : "s"}`);
+  const missingConfig = Math.max(
+    0,
+    order.items_count - order.configured_items_count,
+  );
   if (missingConfig) missing.push(`${missingConfig} config`);
   return missing;
 }
 
-export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "design" | "mockup" }) {
+export function OrderPreviewThumbnails({
+  order,
+  kind,
+}: {
+  order: Order;
+  kind: "design" | "mockup";
+}) {
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const usages = kind === "design" ? ["main_design"] : ["mockup", "mockup2"];
@@ -669,8 +901,14 @@ export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "d
     order.lines?.flatMap((line) =>
       line.items.flatMap((item) =>
         (item.files || [])
-          .filter((file) => file.is_selected && usages.includes(file.usage || ""))
-          .map((file) => ({ ...file, itemNumber: item.item_number, listingTitle: line.listing_title })),
+          .filter(
+            (file) => file.is_selected && usages.includes(file.usage || ""),
+          )
+          .map((file) => ({
+            ...file,
+            itemNumber: item.item_number,
+            listingTitle: line.listing_title,
+          })),
       ),
     ) || [];
   const fallbackCount = kind === "design" ? order.designs_count : 0;
@@ -681,7 +919,12 @@ export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "d
   };
   return (
     <>
-      <div className="flex min-w-[112px] items-center gap-1.5" data-row-interactive="true" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
+      <div
+        className="flex min-w-[112px] items-center gap-1.5"
+        data-row-interactive="true"
+        onClick={stopRowNavigation}
+        onKeyDown={stopRowNavigation}
+      >
         {visible.length ? (
           visible.map((file, index) => (
             <button
@@ -705,17 +948,29 @@ export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "d
                 }
               }}
             >
-              {file.url && file.mime_type.startsWith("image/") ? <img src={file.url} alt="" className="h-full w-full object-contain" /> : <FileGlyph file={file} />}
+              {file.url && file.mime_type.startsWith("image/") ? (
+                <img
+                  src={file.url}
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <FileGlyph file={file} />
+              )}
             </button>
           ))
         ) : fallbackCount ? (
-          <span className="flex h-10 w-10 items-center justify-center rounded border border-border bg-slate-50 text-xs font-semibold text-muted">{fallbackCount}</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded border border-border bg-slate-50 text-xs font-semibold text-muted">
+            {fallbackCount}
+          </span>
         ) : (
           <span className="flex h-10 w-10 items-center justify-center rounded border border-dashed border-border bg-slate-50 text-slate-400">
             <HiOutlinePhoto className="h-5 w-5" />
           </span>
         )}
-        {overflow ? <span className="text-xs font-semibold text-muted">+{overflow}</span> : null}
+        {overflow ? (
+          <span className="text-xs font-semibold text-muted">+{overflow}</span>
+        ) : null}
       </div>
       {previewIndex !== null ? (
         <FilePreviewModal
@@ -724,8 +979,16 @@ export function OrderPreviewThumbnails({ order, kind }: { order: Order; kind: "d
           itemReference={`Item ${files[previewIndex]?.itemNumber}${files[previewIndex]?.listingTitle ? ` / ${files[previewIndex]?.listingTitle}` : ""}`}
           hasPrevious={previewIndex > 0}
           hasNext={previewIndex < files.length - 1}
-          onPrevious={() => setPreviewIndex((index) => (index === null ? index : Math.max(0, index - 1)))}
-          onNext={() => setPreviewIndex((index) => (index === null ? index : Math.min(files.length - 1, index + 1)))}
+          onPrevious={() =>
+            setPreviewIndex((index) =>
+              index === null ? index : Math.max(0, index - 1),
+            )
+          }
+          onNext={() =>
+            setPreviewIndex((index) =>
+              index === null ? index : Math.min(files.length - 1, index + 1),
+            )
+          }
           onClose={() => {
             setPreviewIndex(null);
             window.setTimeout(() => triggerRef.current?.focus(), 0);
@@ -741,7 +1004,15 @@ function localDateTimeValue(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?: boolean; onCancel?: () => void; onCreated?: (order: Order) => void } = {}) {
+export function CreateOrderForm({
+  modal = false,
+  onCancel,
+  onCreated,
+}: {
+  modal?: boolean;
+  onCancel?: () => void;
+  onCreated?: (order: Order) => void;
+} = {}) {
   const navigate = useNavigate();
   const toast = useToast();
   const shops = useShops();
@@ -756,9 +1027,11 @@ export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?
   });
   function validate() {
     const errors: Record<string, string> = {};
-    if (!form.etsy_order_id.trim()) errors.etsy_order_id = "Etsy Order ID is required.";
+    if (!form.etsy_order_id.trim())
+      errors.etsy_order_id = "Etsy Order ID is required.";
     if (!form.shop_id) errors.shop_id = "Shop is required.";
-    if (form.ordered_at && Number.isNaN(new Date(form.ordered_at).getTime())) errors.ordered_at = "Enter a valid date and time.";
+    if (form.ordered_at && Number.isNaN(new Date(form.ordered_at).getTime()))
+      errors.ordered_at = "Enter a valid date and time.";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   }
@@ -767,7 +1040,9 @@ export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?
       orderApi.create({
         etsy_order_id: form.etsy_order_id.trim(),
         shop_id: form.shop_id,
-        ordered_at: form.ordered_at ? new Date(form.ordered_at).toISOString() : undefined,
+        ordered_at: form.ordered_at
+          ? new Date(form.ordered_at).toISOString()
+          : undefined,
         customer_name: form.customer_name || undefined,
         customer_note: form.customer_note || undefined,
       }),
@@ -779,55 +1054,136 @@ export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?
       }
     },
     onError: (error) => {
-      const duplicate = error instanceof ApiError && error.code === "DUPLICATE_ETSY_ORDER";
-      const message = duplicate ? "An order with this Etsy Order ID already exists in the selected shop." : apiMessage(error, "Unable to create order");
+      const duplicate =
+        error instanceof ApiError && error.code === "DUPLICATE_ETSY_ORDER";
+      const message = duplicate
+        ? "An order with this Etsy Order ID already exists in the selected shop."
+        : apiMessage(error, "Unable to create order");
       setServerError(message);
       toast.push({ type: "error", title: "Create failed", message });
     },
   });
-  const dirty = Boolean(form.etsy_order_id || form.shop_id || form.customer_name || form.customer_note || form.ordered_at);
+  const dirty = Boolean(
+    form.etsy_order_id ||
+    form.shop_id ||
+    form.customer_name ||
+    form.customer_note ||
+    form.ordered_at,
+  );
   const content = (
     <div className={clsx(!modal && "max-w-4xl", "space-y-5")}>
       {!modal ? (
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <BackToOrders />
-        <div className="flex items-center gap-2 text-sm text-muted">
-          <Badge tone="neutral">Draft</Badge>
-          {create.isPending ? "Saving" : dirty ? "Unsaved changes" : "Not started"}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <BackToOrders />
+          <div className="flex items-center gap-2 text-sm text-muted">
+            <Badge tone="neutral">Draft</Badge>
+            {create.isPending
+              ? "Saving"
+              : dirty
+                ? "Unsaved changes"
+                : "Not started"}
+          </div>
         </div>
-      </div>
       ) : null}
-      {serverError ? <ErrorState title="Save failed" message={serverError} /> : null}
+      {serverError ? (
+        <ErrorState title="Save failed" message={serverError} />
+      ) : null}
       <div className="grid gap-4">
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Etsy Order ID" error={fieldErrors.etsy_order_id || (serverError.includes("already exists") ? serverError : undefined)}>
+          <Field
+            label="Etsy Order ID"
+            error={
+              fieldErrors.etsy_order_id ||
+              (serverError.includes("already exists") ? serverError : undefined)
+            }
+          >
             <Input
               value={form.etsy_order_id}
-              onChange={(event) => setForm((current) => ({ ...current, etsy_order_id: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  etsy_order_id: event.target.value,
+                }))
+              }
               autoFocus
             />
           </Field>
           <Field label="Shop" error={fieldErrors.shop_id}>
-            <Select value={form.shop_id} onChange={(event) => setForm((current) => ({ ...current, shop_id: event.target.value }))}>
+            <Select
+              value={form.shop_id}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  shop_id: event.target.value,
+                }))
+              }
+            >
               <option value="">Select shop</option>
               {shops.data?.map((shop) => (
-                <option key={shop.id} value={shop.id}>{shop.name}</option>
+                <option key={shop.id} value={shop.id}>
+                  {shop.name}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Ordered At" error={fieldErrors.ordered_at}>
-            <Input type="datetime-local" value={form.ordered_at} onChange={(event) => setForm((current) => ({ ...current, ordered_at: event.target.value }))} />
+            <Input
+              type="datetime-local"
+              value={form.ordered_at}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  ordered_at: event.target.value,
+                }))
+              }
+            />
           </Field>
           <Field label="Customer Name">
-            <Input value={form.customer_name} onChange={(event) => setForm((current) => ({ ...current, customer_name: event.target.value }))} />
+            <Input
+              value={form.customer_name}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  customer_name: event.target.value,
+                }))
+              }
+            />
           </Field>
         </div>
         <Field label="Customer Note">
-          <Textarea rows={3} className="min-h-[76px]" value={form.customer_note} onChange={(event) => setForm((current) => ({ ...current, customer_note: event.target.value }))} />
+          <Textarea
+            rows={3}
+            className="min-h-[76px]"
+            value={form.customer_note}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                customer_note: event.target.value,
+              }))
+            }
+          />
         </Field>
-        <div className={clsx("flex justify-end gap-2", modal && "sticky bottom-0 -mx-5 -mb-5 border-t border-border bg-surface px-5 py-4")}>
-          {modal ? <Button type="button" variant="secondary" disabled={create.isPending} onClick={onCancel}>Cancel</Button> : null}
-          <Button disabled={create.isPending} onClick={() => validate() && create.mutate()}>
+        <div
+          className={clsx(
+            "flex justify-end gap-2",
+            modal &&
+              "sticky bottom-0 -mx-5 -mb-5 border-t border-border bg-surface px-5 py-4",
+          )}
+        >
+          {modal ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={create.isPending}
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+          ) : null}
+          <Button
+            disabled={create.isPending}
+            onClick={() => validate() && create.mutate()}
+          >
             {create.isPending ? <Spinner label="Creating" /> : "Create Order"}
           </Button>
         </div>
@@ -835,7 +1191,16 @@ export function CreateOrderForm({ modal = false, onCancel, onCreated }: { modal?
     </div>
   );
   if (modal) {
-    return <Modal title="Create Order" description="Start the order workspace with the intake fields." width="max-w-2xl" onClose={onCancel || (() => undefined)}>{content}</Modal>;
+    return (
+      <Modal
+        title="Create Order"
+        description="Start the order workspace with the intake fields."
+        width="max-w-2xl"
+        onClose={onCancel || (() => undefined)}
+      >
+        {content}
+      </Modal>
+    );
   }
   return content;
 }
@@ -854,20 +1219,49 @@ export function OrderHeader({
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
       <div className="min-w-0">
-        <div className="mb-2"><BackToOrders /></div>
+        <div className="mb-2">
+          <BackToOrders />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="truncate text-xl font-bold">{order.etsy_order_id}</h2>
           <OrderStatusBadge status={order.status} />
-          {hasUnsavedChanges ? <span className="text-xs font-semibold text-amber-700">Unsaved changes</span> : null}
+          {hasUnsavedChanges ? (
+            <span className="text-xs font-semibold text-amber-700">
+              Unsaved changes
+            </span>
+          ) : null}
         </div>
         <p className="mt-1 text-sm text-muted">
-          {order.shop.name} / {order.customer_name || "No customer"} / Created by {order.created_by.full_name} / Updated {formatDateTime(order.updated_at)}
+          {order.shop.name} / {order.customer_name || "No customer"} / Created
+          by {order.created_by.full_name} / Updated{" "}
+          {formatDateTime(order.updated_at)}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => onOpenDrawer("info")}>Order Info</Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => onOpenDrawer("supplier")}>Supplier</Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => onOpenDrawer("activity")}>Activity</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onOpenDrawer("info")}
+        >
+          Order Info
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onOpenDrawer("supplier")}
+        >
+          Supplier
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onOpenDrawer("activity")}
+        >
+          Activity
+        </Button>
         {children}
       </div>
     </div>
@@ -883,7 +1277,9 @@ export function OrderDetailsDrawer({
   activeTab: "info" | "supplier" | "activity" | null;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"info" | "supplier" | "activity">(activeTab || "info");
+  const [tab, setTab] = useState<"info" | "supplier" | "activity">(
+    activeTab || "info",
+  );
   useEffect(() => {
     if (activeTab) setTab(activeTab);
   }, [activeTab]);
@@ -902,15 +1298,30 @@ export function OrderDetailsDrawer({
     { id: "activity", label: "Activity" },
   ] as const;
   return (
-    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Order details">
-      <button type="button" className="absolute inset-0 bg-slate-950/30" aria-label="Close details" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-40"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Order details"
+    >
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-950/30"
+        aria-label="Close details"
+        onClick={onClose}
+      />
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-[520px] flex-col border-l border-border bg-white shadow-soft">
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">
           <div>
             <h2 className="font-bold">Order Details</h2>
             <p className="text-xs text-muted">{order.etsy_order_id}</p>
           </div>
-          <button type="button" className="rounded p-2 text-muted hover:bg-slate-100" aria-label="Close details" onClick={onClose}>
+          <button
+            type="button"
+            className="rounded p-2 text-muted hover:bg-slate-100"
+            aria-label="Close details"
+            onClick={onClose}
+          >
             <HiOutlineXMark className="h-5 w-5" />
           </button>
         </div>
@@ -921,7 +1332,9 @@ export function OrderDetailsDrawer({
               type="button"
               className={clsx(
                 "rounded px-3 py-2 text-xs font-semibold",
-                tab === item.id ? "bg-blue-900 text-white" : "text-slate-600 hover:bg-slate-100",
+                tab === item.id
+                  ? "bg-blue-900 text-white"
+                  : "text-slate-600 hover:bg-slate-100",
               )}
               onClick={() => setTab(item.id)}
             >
@@ -957,13 +1370,20 @@ function SupplierSummaryTab({ order }: { order: Order }) {
   const supplier = order.supplier;
   const toast = useToast();
   const queryClient = useQueryClient();
-  const submitted = Boolean(supplier.submitted || supplier.order_id || supplier.submitted_at || order.submitted_at || order.status.code === orderStatusCodes.supplierSubmitted);
+  const submitted = Boolean(
+    supplier.submitted ||
+    supplier.order_id ||
+    supplier.submitted_at ||
+    order.submitted_at ||
+    order.status.code === orderStatusCodes.supplierSubmitted,
+  );
   const statusLabel = supplier.sync_needed
     ? "Submitted - details not synchronized"
     : submitted
       ? supplier.status || "Submitted"
       : "Not submitted";
-  const missing = (value?: string | number | boolean | null) => value === undefined || value === null || value === "";
+  const missing = (value?: string | number | boolean | null) =>
+    value === undefined || value === null || value === "";
   const display = (value?: string | number | boolean | null) => {
     if (missing(value)) return "—";
     if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -974,13 +1394,22 @@ function SupplierSummaryTab({ order }: { order: Order }) {
     onSuccess: async (updated) => {
       queryClient.setQueryData(queryKeys.orders.detail(order.id), updated);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(order.id) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.activities(order.id, { page_size: 20 }) }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.detail(order.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.orders.activities(order.id, { page_size: 20 }),
+        }),
         queryClient.invalidateQueries({ queryKey: ["orders"] }),
       ]);
       toast.push({ type: "success", title: "Supplier details refreshed" });
     },
-    onError: (error) => toast.push({ type: "error", title: "Refresh failed", message: apiMessage(error, "Unable to refresh supplier details") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Refresh failed",
+        message: apiMessage(error, "Unable to refresh supplier details"),
+      }),
   });
   const shipping = supplier.shipping;
   return (
@@ -988,33 +1417,65 @@ function SupplierSummaryTab({ order }: { order: Order }) {
       <div className="flex items-center justify-between gap-3">
         <SupplierStatusBadge status={statusLabel} />
         {submitted ? (
-          <Button type="button" size="sm" variant="secondary" disabled={refresh.isPending} onClick={() => refresh.mutate()}>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
             {refresh.isPending ? <Spinner label="Refreshing" /> : "Refresh"}
           </Button>
         ) : null}
       </div>
       <dl className="grid gap-4 text-sm sm:grid-cols-2">
-        <Info label="Supplier Order ID" value={display(supplier.order_id)} copyValue={supplier.order_id || undefined} />
-        <Info label="Customer Order ID" value={display(supplier.customer_order_id || order.etsy_order_id)} copyValue={supplier.customer_order_id || order.etsy_order_id} />
+        <Info
+          label="Supplier Order ID"
+          value={display(supplier.order_id)}
+          copyValue={supplier.order_id || undefined}
+        />
+        <Info
+          label="Customer Order ID"
+          value={display(supplier.customer_order_id || order.etsy_order_id)}
+          copyValue={supplier.customer_order_id || order.etsy_order_id}
+        />
         <Info label="Supplier Source" value={display(supplier.source)} />
         <Info label="Supplier Status" value={display(supplier.status)} />
-        <Info label="Tracking Number" value={display(supplier.tracking_number)} copyValue={supplier.tracking_number || undefined} />
+        <Info
+          label="Tracking Number"
+          value={display(supplier.tracking_number)}
+          copyValue={supplier.tracking_number || undefined}
+        />
         <Info label="Carrier" value={display(supplier.carrier)} />
         <Info label="Label Buy" value={display(supplier.label_buy)} />
         <Info label="Total Items" value={display(supplier.total_items)} />
         <Info label="Total Quantity" value={display(supplier.total_quantity)} />
         <Info label="Items Fee" value={display(supplier.items_fee)} />
-        <Info label="Extra Services Fee" value={display(supplier.extra_services_fee)} />
+        <Info
+          label="Extra Services Fee"
+          value={display(supplier.extra_services_fee)}
+        />
         <Info label="Shipping Fee" value={display(supplier.shipping_fee)} />
         <Info label="Label Fee" value={display(supplier.label_fee)} />
         <Info label="Total Fee" value={display(supplier.total_fee)} />
-        <Info label="Supplier Created At" value={formatDateTime(supplier.created_at)} />
-        <Info label="Submitted At" value={formatDateTime(supplier.submitted_at || order.submitted_at)} />
-        <Info label="Last Synced At" value={formatDateTime(supplier.last_synced_at)} />
+        <Info
+          label="Supplier Created At"
+          value={formatDateTime(supplier.created_at)}
+        />
+        <Info
+          label="Submitted At"
+          value={formatDateTime(supplier.submitted_at || order.submitted_at)}
+        />
+        <Info
+          label="Last Synced At"
+          value={formatDateTime(supplier.last_synced_at)}
+        />
       </dl>
       {shipping ? (
         <details className="rounded border border-border p-3">
-          <summary className="cursor-pointer text-sm font-semibold">Detected Shipping Information</summary>
+          <summary className="cursor-pointer text-sm font-semibold">
+            Detected Shipping Information
+          </summary>
           <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
             <Info label="Buyer" value={display(shipping.buyer)} />
             <Info label="Phone" value={display(shipping.phone)} />
@@ -1042,7 +1503,9 @@ function ActivityTab({ order }: { order: Order }) {
   }
   return (
     <div className="grid gap-3">
-      {items.map((activity) => <ActivityItem key={activity.id} activity={activity} />)}
+      {items.map((activity) => (
+        <ActivityItem key={activity.id} activity={activity} />
+      ))}
     </div>
   );
 }
@@ -1085,11 +1548,24 @@ export function WorkflowActionBar({
       await onChanged();
       toast.push({ type: "success", title: "Order updated" });
     },
-    onError: (error) => toast.push({ type: "error", title: "Action failed", message: apiMessage(error, "Unable to update workflow") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Action failed",
+        message: apiMessage(error, "Unable to update workflow"),
+      }),
   });
   const button = (action: WorkflowAction, label: string, primary = false) =>
     actions.has(action) ? (
-      <Button key={action} type="button" variant={primary ? "primary" : "secondary"} disabled={workflow.isPending} onClick={() => action === "cancel" ? setCancelOpen(true) : workflow.mutate(action)}>
+      <Button
+        key={action}
+        type="button"
+        variant={primary ? "primary" : "secondary"}
+        disabled={workflow.isPending}
+        onClick={() =>
+          action === "cancel" ? setCancelOpen(true) : workflow.mutate(action)
+        }
+      >
         {workflow.isPending ? <Spinner label="Working" /> : label}
       </Button>
     ) : null;
@@ -1097,7 +1573,15 @@ export function WorkflowActionBar({
     <>
       <div className="flex flex-wrap gap-2">
         {button("submit_for_review", "Submit for Review", true)}
-        {actions.has("request_revision") ? <Button type="button" variant="secondary" onClick={() => setRevisionOpen(true)}>Request Revision</Button> : null}
+        {actions.has("request_revision") ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setRevisionOpen(true)}
+          >
+            Request Revision
+          </Button>
+        ) : null}
         {button("mark_ready", "Mark Ready", true)}
         {actions.has("send_to_supplier") ? (
           <Button type="button" onClick={() => setSendOpen(true)}>
@@ -1109,34 +1593,80 @@ export function WorkflowActionBar({
         {button("resume", "Resume")}
         {button("cancel", "Cancel Order")}
       </div>
-      {revisionOpen ? <RequestRevisionDialog order={order} onClose={() => setRevisionOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
-      {sendOpen ? <SendToSupplierDialog order={order} onClose={() => setSendOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
-      {cancelOpen ? <CancelOrderDialog order={order} onClose={() => setCancelOpen(false)} onChanged={onChanged} onBeforeAction={onBeforeAction} /> : null}
+      {revisionOpen ? (
+        <RequestRevisionDialog
+          order={order}
+          onClose={() => setRevisionOpen(false)}
+          onChanged={onChanged}
+          onBeforeAction={onBeforeAction}
+        />
+      ) : null}
+      {sendOpen ? (
+        <SendToSupplierDialog
+          order={order}
+          onClose={() => setSendOpen(false)}
+          onChanged={onChanged}
+          onBeforeAction={onBeforeAction}
+        />
+      ) : null}
+      {cancelOpen ? (
+        <CancelOrderDialog
+          order={order}
+          onClose={() => setCancelOpen(false)}
+          onChanged={onChanged}
+          onBeforeAction={onBeforeAction}
+        />
+      ) : null}
     </>
   );
 }
 
-function RequestRevisionDialog({ order, onClose, onChanged, onBeforeAction }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void> }) {
+function RequestRevisionDialog({
+  order,
+  onClose,
+  onChanged,
+  onBeforeAction,
+}: {
+  order: Order;
+  onClose: () => void;
+  onChanged: () => void;
+  onBeforeAction?: () => Promise<void>;
+}) {
   const toast = useToast();
   const [note, setNote] = useState("");
   const [itemId, setItemId] = useState("");
   const mutation = useMutation({
     mutationFn: async () => {
       await onBeforeAction?.();
-      return orderApi.requestRevision(order.id, { note, order_item_id: itemId || undefined });
+      return orderApi.requestRevision(order.id, {
+        note,
+        order_item_id: itemId || undefined,
+      });
     },
     onSuccess: async () => {
       await onChanged();
       toast.push({ type: "success", title: "Revision requested" });
       onClose();
     },
-    onError: (error) => toast.push({ type: "error", title: "Revision failed", message: apiMessage(error, "Unable to request revision") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Revision failed",
+        message: apiMessage(error, "Unable to request revision"),
+      }),
   });
   return (
-    <Modal title="Request Revision" description="Add a clear note for the employee." onClose={onClose}>
+    <Modal
+      title="Request Revision"
+      description="Add a clear note for the employee."
+      onClose={onClose}
+    >
       <div className="grid gap-4">
         <Field label="Related item">
-          <Select value={itemId} onChange={(event) => setItemId(event.target.value)}>
+          <Select
+            value={itemId}
+            onChange={(event) => setItemId(event.target.value)}
+          >
             <option value="">Whole order</option>
             {order.lines?.flatMap((line) =>
               line.items.map((item) => (
@@ -1148,12 +1678,25 @@ function RequestRevisionDialog({ order, onClose, onChanged, onBeforeAction }: { 
           </Select>
         </Field>
         <Field label="Revision note">
-          <Textarea value={note} onChange={(event) => setNote(event.target.value)} />
+          <Textarea
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
         </Field>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="button" disabled={!note.trim() || mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? <Spinner label="Saving" /> : "Request revision"}
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!note.trim() || mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? (
+              <Spinner label="Saving" />
+            ) : (
+              "Request revision"
+            )}
           </Button>
         </div>
       </div>
@@ -1161,41 +1704,118 @@ function RequestRevisionDialog({ order, onClose, onChanged, onBeforeAction }: { 
   );
 }
 
-function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction, retry = false }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void>; retry?: boolean }) {
+function SendToSupplierDialog({
+  order,
+  onClose,
+  onChanged,
+  onBeforeAction,
+  retry = false,
+}: {
+  order: Order;
+  onClose: () => void;
+  onChanged: () => void;
+  onBeforeAction?: () => Promise<void>;
+  retry?: boolean;
+}) {
   const toast = useToast();
   const label = activeShippingLabel(order);
   const mutation = useMutation({
     mutationFn: async () => {
       await onBeforeAction?.();
-      return retry ? orderApi.retrySupplier(order.id) : orderApi.sendToSupplier(order.id);
+      return retry
+        ? orderApi.retrySupplier(order.id)
+        : orderApi.sendToSupplier(order.id);
     },
     onSuccess: async () => {
       await onChanged();
       toast.push({ type: "success", title: "Supplier submission queued" });
       onClose();
     },
-    onError: (error) => toast.push({ type: "error", title: "Send failed", message: apiMessage(error, "Unable to send supplier order") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Send failed",
+        message: apiMessage(error, "Unable to send supplier order"),
+      }),
   });
-  const files = (order.lines || []).flatMap((line) => line.items.flatMap((item) => item.files || []));
+  const files = (order.lines || []).flatMap((line) =>
+    line.items.flatMap((item) => item.files || []),
+  );
   return (
-    <Modal title={retry ? "Retry Supplier" : "Send to Supplier"} description="This will create the production order in the supplier system." onClose={mutation.isPending ? () => undefined : onClose} width="max-w-2xl">
+    <Modal
+      title={retry ? "Retry Supplier" : "Send to Supplier"}
+      description="This will create the production order in the supplier system."
+      onClose={mutation.isPending ? () => undefined : onClose}
+      width="max-w-2xl"
+    >
       <div className="grid gap-4">
         <dl className="grid gap-3 text-sm md:grid-cols-2">
           <Info label="Etsy Order ID" value={order.etsy_order_id} />
           <Info label="Shop" value={order.shop.name} />
           <Info label="Products" value={String(order.products_count)} />
           <Info label="Items" value={String(order.items_count)} />
-          <Info label="Total quantity" value={String(order.readiness?.quantity || orderTotalQuantity(order))} />
-          <Info label="Shipping label" value={label?.original_name || "Missing"} />
-          <Info label="Main designs" value={String(files.filter((file) => file.usage === "main_design" && file.is_selected).length)} />
-          <Info label="Sub designs" value={String(files.filter((file) => file.usage === "sub_design" && file.is_selected).length)} />
-          <Info label="Mockups" value={String(files.filter((file) => file.usage === "mockup" && file.is_selected).length)} />
-          <Info label="Mockup 2" value={String(files.filter((file) => file.usage === "mockup2" && file.is_selected).length)} />
+          <Info
+            label="Total quantity"
+            value={String(
+              order.readiness?.quantity || orderTotalQuantity(order),
+            )}
+          />
+          <Info
+            label="Shipping label"
+            value={label?.original_name || "Missing"}
+          />
+          <Info
+            label="Main designs"
+            value={String(
+              files.filter(
+                (file) => file.usage === "main_design" && file.is_selected,
+              ).length,
+            )}
+          />
+          <Info
+            label="Sub designs"
+            value={String(
+              files.filter(
+                (file) => file.usage === "sub_design" && file.is_selected,
+              ).length,
+            )}
+          />
+          <Info
+            label="Mockups"
+            value={String(
+              files.filter(
+                (file) => file.usage === "mockup" && file.is_selected,
+              ).length,
+            )}
+          />
+          <Info
+            label="Mockup 2"
+            value={String(
+              files.filter(
+                (file) => file.usage === "mockup2" && file.is_selected,
+              ).length,
+            )}
+          />
         </dl>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancel</Button>
-          <Button type="button" disabled={mutation.isPending || !order.readiness?.ready} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? <Spinner label="Submitting" /> : "Create Supplier Order"}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={mutation.isPending}
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={mutation.isPending || !order.readiness?.ready}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? (
+              <Spinner label="Submitting" />
+            ) : (
+              "Create Supplier Order"
+            )}
           </Button>
         </div>
       </div>
@@ -1203,11 +1823,27 @@ function SendToSupplierDialog({ order, onClose, onChanged, onBeforeAction, retry
   );
 }
 
-function CancelOrderDialog({ order, onClose, onChanged, onBeforeAction }: { order: Order; onClose: () => void; onChanged: () => void; onBeforeAction?: () => Promise<void> }) {
+function CancelOrderDialog({
+  order,
+  onClose,
+  onChanged,
+  onBeforeAction,
+}: {
+  order: Order;
+  onClose: () => void;
+  onChanged: () => void;
+  onBeforeAction?: () => Promise<void>;
+}) {
   const toast = useToast();
   const [reason, setReason] = useState("");
-  const [result, setResult] = useState<Order["supplier_cancellation"] | null>(null);
-  const supplierSubmitted = Boolean(order.supplier.order_id || order.submitted_at || order.status.code === orderStatusCodes.supplierSubmitted);
+  const [result, setResult] = useState<Order["supplier_cancellation"] | null>(
+    null,
+  );
+  const supplierSubmitted = Boolean(
+    order.supplier.order_id ||
+    order.submitted_at ||
+    order.status.code === orderStatusCodes.supplierSubmitted,
+  );
   const mutation = useMutation({
     mutationFn: async () => {
       await onBeforeAction?.();
@@ -1219,33 +1855,88 @@ function CancelOrderDialog({ order, onClose, onChanged, onBeforeAction }: { orde
       toast.push({ type: "success", title: "Order cancelled successfully" });
       if (!updated.supplier_cancellation?.refunded) onClose();
     },
-    onError: (error) => toast.push({ type: "error", title: "Cancellation failed", message: apiMessage(error, "The order could not be cancelled") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Cancellation failed",
+        message: apiMessage(error, "The order could not be cancelled"),
+      }),
   });
   return (
-    <Modal title="Cancel Order" description={supplierSubmitted ? "This order has already been sent to the supplier. A cancellation request will be sent to the supplier and may be rejected." : "This order has not been sent to the supplier. It will be marked as cancelled in this system."} onClose={mutation.isPending ? () => undefined : onClose} width="max-w-2xl">
+    <Modal
+      title="Cancel Order"
+      description={
+        supplierSubmitted
+          ? "This order has already been sent to the supplier. A cancellation request will be sent to the supplier and may be rejected."
+          : "This order has not been sent to the supplier. It will be marked as cancelled in this system."
+      }
+      onClose={mutation.isPending ? () => undefined : onClose}
+      width="max-w-2xl"
+    >
       <div className="grid gap-4">
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <Info label="Etsy Order ID" value={order.etsy_order_id} />
-          <Info label="Supplier Order ID" value={order.supplier.order_id || "-"} />
-          <Info label="Current Supplier Status" value={order.supplier.status || "Not submitted"} />
+          <Info
+            label="Supplier Order ID"
+            value={order.supplier.order_id || "-"}
+          />
+          <Info
+            label="Current Supplier Status"
+            value={order.supplier.status || "Not submitted"}
+          />
           <Info label="Shop" value={order.shop.name} />
         </dl>
         <Field label="Cancellation reason">
-          <Textarea rows={2} className="min-h-[68px]" value={reason} onChange={(event) => setReason(event.target.value)} />
+          <Textarea
+            rows={2}
+            className="min-h-[68px]"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
         </Field>
-        {supplierSubmitted ? <ErrorState title="Supplier cancellation" message="The local order will not be marked cancelled unless the supplier accepts the cancellation." /> : null}
+        {supplierSubmitted ? (
+          <ErrorState
+            title="Supplier cancellation"
+            message="The local order will not be marked cancelled unless the supplier accepts the cancellation."
+          />
+        ) : null}
         {result?.refunded ? (
           <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
             <p className="font-semibold">Order cancelled successfully</p>
-            <p className="mt-2">Refunded: Items fee {result.refunded.items_fee || "-"} / Shipping fee {result.refunded.shipping_fee || "-"} / Total {result.refunded.total || "-"}</p>
-            <p className="mt-1">Current supplier balance: {result.current_balance || "-"}</p>
-            <p className="mt-1">Cancelled at: {result.canceled_at ? formatDateTime(result.canceled_at) : "-"}</p>
+            <p className="mt-2">
+              Refunded: Items fee {result.refunded.items_fee || "-"} / Shipping
+              fee {result.refunded.shipping_fee || "-"} / Total{" "}
+              {result.refunded.total || "-"}
+            </p>
+            <p className="mt-1">
+              Current supplier balance: {result.current_balance || "-"}
+            </p>
+            <p className="mt-1">
+              Cancelled at:{" "}
+              {result.canceled_at ? formatDateTime(result.canceled_at) : "-"}
+            </p>
           </div>
         ) : null}
         <div className="sticky bottom-0 -mx-5 -mb-5 flex justify-end gap-2 border-t border-border bg-surface px-5 py-4">
-          <Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Keep Order</Button>
-          <Button type="button" variant="danger" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            {mutation.isPending ? <Spinner label="Cancelling" /> : "Cancel Order"}
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={mutation.isPending}
+            onClick={onClose}
+          >
+            Keep Order
+          </Button>
+          <Button
+            type="button"
+            variant="danger"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate()}
+          >
+            {mutation.isPending ? (
+              <Spinner label="Cancelling" />
+            ) : (
+              "Cancel Order"
+            )}
           </Button>
         </div>
       </div>
@@ -1274,13 +1965,22 @@ export function CompactReadinessBar({ order }: { order: Order }) {
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <p className="font-bold">Order readiness</p>
-          <p className="text-sm font-semibold text-muted">{progress.percent}%</p>
-          <Badge tone={order.readiness?.ready ? "success" : "warning"}>{order.readiness?.ready ? "Ready" : "Not ready"}</Badge>
+          <p className="text-sm font-semibold text-muted">
+            {progress.percent}%
+          </p>
+          <Badge tone={order.readiness?.ready ? "success" : "warning"}>
+            {order.readiness?.ready ? "Ready" : "Not ready"}
+          </Badge>
         </div>
-        <p className="text-xs text-muted">{progress.passed} of {progress.total} checks complete</p>
+        <p className="text-xs text-muted">
+          {progress.passed} of {progress.total} checks complete
+        </p>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-        <div className="h-full bg-blue-700 transition-all" style={{ width: `${progress.percent}%` }} />
+        <div
+          className="h-full bg-blue-700 transition-all"
+          style={{ width: `${progress.percent}%` }}
+        />
       </div>
       {failed.length ? (
         <div className="mt-2">
@@ -1288,8 +1988,14 @@ export function CompactReadinessBar({ order }: { order: Order }) {
             Missing: {missingSummary}
             {failed.length > 2 ? ` and ${failed.length - 2} more` : ""}
           </p>
-          <button type="button" className="mt-1 text-xs font-semibold text-blue-700 hover:text-blue-900" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? "Hide checks" : `View ${failed.length} missing requirements`}
+          <button
+            type="button"
+            className="mt-1 text-xs font-semibold text-blue-700 hover:text-blue-900"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded
+              ? "Hide checks"
+              : `View ${failed.length} missing requirements`}
           </button>
           {expanded ? (
             <div className="mt-2 grid gap-1.5">
@@ -1314,7 +2020,15 @@ export function CompactReadinessBar({ order }: { order: Order }) {
 
 export const OrderReadinessPanel = CompactReadinessBar;
 
-export function AddListingDialog({ orderId, onClose, onAdded }: { orderId: string; onClose: () => void; onAdded: (line: OrderLine) => void }) {
+export function AddListingDialog({
+  orderId,
+  onClose,
+  onAdded,
+}: {
+  orderId: string;
+  onClose: () => void;
+  onAdded: (line: OrderLine) => void;
+}) {
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -1322,8 +2036,16 @@ export function AddListingDialog({ orderId, onClose, onAdded }: { orderId: strin
   const [selected, setSelected] = useState<Listing | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [mode, setMode] = useState<"same" | "different">("same");
-  const listings = useListingSelector({ page: 1, page_size: 20, search: debouncedSearch, category_id: categoryID || undefined });
-  const categories = useMutation({ mutationFn: () => categoryApi.list({ page: 1, page_size: 200, is_active: true }) });
+  const listings = useListingSelector({
+    page: 1,
+    page_size: 20,
+    search: debouncedSearch,
+    category_id: categoryID || undefined,
+  });
+  const categories = useMutation({
+    mutationFn: () =>
+      categoryApi.list({ page: 1, page_size: 200, is_active: true }),
+  });
   useEffect(() => {
     categories.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1333,52 +2055,114 @@ export function AddListingDialog({ orderId, onClose, onAdded }: { orderId: strin
     return () => window.clearTimeout(handle);
   }, [search]);
   const add = useMutation({
-    mutationFn: () => orderApi.addLine(orderId, { listing_id: selected?.id || "", quantity, personalization_mode: mode }),
+    mutationFn: () =>
+      orderApi.addLine(orderId, {
+        listing_id: selected?.id || "",
+        quantity,
+        personalization_mode: mode,
+      }),
     onSuccess: (line) => {
       toast.push({ type: "success", title: "Listing added" });
       onAdded(line);
       onClose();
-      window.setTimeout(() => document.getElementById(`order-line-${line.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+      window.setTimeout(
+        () =>
+          document
+            .getElementById(`order-line-${line.id}`)
+            ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+        100,
+      );
     },
-    onError: (error) => toast.push({ type: "error", title: "Could not add listing", message: apiMessage(error, "Add listing failed") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Could not add listing",
+        message: apiMessage(error, "Add listing failed"),
+      }),
   });
   return (
-    <Modal title="Add Listing" description="Choose a configured listing, then set quantity and personalization mode." onClose={onClose} width="max-w-5xl">
+    <Modal
+      title="Add Listing"
+      description="Choose a configured listing, then set quantity and personalization mode."
+      onClose={onClose}
+      width="max-w-5xl"
+    >
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="grid gap-3">
           <div className="grid gap-2 md:grid-cols-[1fr_220px]">
-            <SearchInput placeholder="Search title or internal SKU..." value={search} onChange={(event) => setSearch(event.target.value)} />
-            <Select value={categoryID} onChange={(event) => setCategoryID(event.target.value)}>
+            <SearchInput
+              placeholder="Search title or internal SKU..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <Select
+              value={categoryID}
+              onChange={(event) => setCategoryID(event.target.value)}
+            >
               <option value="">All categories</option>
               {categories.data?.data.map((category) => (
-                <option key={category.id} value={category.id}>{category.name}</option>
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
               ))}
             </Select>
           </div>
           {listings.isLoading ? <SkeletonRows rows={5} /> : null}
           {listings.data?.data.map((listing) => (
-            <ListingSelectorRow key={listing.id} listing={listing} selected={selected?.id === listing.id} onSelect={() => setSelected(listing)} />
+            <ListingSelectorRow
+              key={listing.id}
+              listing={listing}
+              selected={selected?.id === listing.id}
+              onSelect={() => setSelected(listing)}
+            />
           ))}
-          {!listings.isLoading && !listings.data?.data.length ? <EmptyState title="No listings found" message="Try a different search or category." /> : null}
+          {!listings.isLoading && !listings.data?.data.length ? (
+            <EmptyState
+              title="No listings found"
+              message="Try a different search or category."
+            />
+          ) : null}
         </div>
         <div className="grid content-start gap-4 border-t border-border pt-4 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
           <h3 className="font-bold">Line setup</h3>
           <Field label="Quantity">
-            <Input type="number" min={1} value={quantity} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value)))} />
+            <Input
+              type="number"
+              min={1}
+              value={quantity}
+              onChange={(event) =>
+                setQuantity(Math.max(1, Number(event.target.value)))
+              }
+            />
           </Field>
           <Field label="Personalization mode">
-            <Select value={mode} onChange={(event) => setMode(event.target.value as "same" | "different")}>
+            <Select
+              value={mode}
+              onChange={(event) =>
+                setMode(event.target.value as "same" | "different")
+              }
+            >
               <option value="same">Same personalization for all</option>
-              <option value="different">Different personalization for each</option>
+              <option value="different">
+                Different personalization for each
+              </option>
             </Select>
           </Field>
           <SoftPanel className="text-sm text-muted">
-            {mode === "same" ? `Creates 1 item x quantity ${quantity}.` : `Creates ${quantity} items x quantity 1.`}
+            {mode === "same"
+              ? `Creates 1 item x quantity ${quantity}.`
+              : `Creates ${quantity} items x quantity 1.`}
           </SoftPanel>
           {selected && !listingSupplierReady(selected) ? (
-            <ErrorState title="Supplier configuration missing" message="This listing can be added only if the backend allows it, but the order cannot be sent until configuration is complete." />
+            <ErrorState
+              title="Supplier configuration missing"
+              message="This listing can be added only if the backend allows it, but the order cannot be sent until configuration is complete."
+            />
           ) : null}
-          <Button disabled={!selected || quantity < 1 || add.isPending} onClick={() => add.mutate()}>
+          <Button
+            disabled={!selected || quantity < 1 || add.isPending}
+            onClick={() => add.mutate()}
+          >
             {add.isPending ? <Spinner label="Adding" /> : "Add Listing"}
           </Button>
         </div>
@@ -1387,7 +2171,15 @@ export function AddListingDialog({ orderId, onClose, onAdded }: { orderId: strin
   );
 }
 
-function ListingSelectorRow({ listing, selected, onSelect }: { listing: Listing; selected: boolean; onSelect: () => void }) {
+function ListingSelectorRow({
+  listing,
+  selected,
+  onSelect,
+}: {
+  listing: Listing;
+  selected: boolean;
+  onSelect: () => void;
+}) {
   const counts = supplierVariantCounts(listing.supplier);
   const ready = listingSupplierReady(listing);
   return (
@@ -1395,20 +2187,36 @@ function ListingSelectorRow({ listing, selected, onSelect }: { listing: Listing;
       type="button"
       className={clsx(
         "grid gap-3 rounded-lg border p-3 text-left transition md:grid-cols-[56px_1fr_auto]",
-        selected ? "border-blue-700 bg-blue-50" : "border-border bg-white hover:bg-slate-50",
+        selected
+          ? "border-blue-700 bg-blue-50"
+          : "border-border bg-white hover:bg-slate-50",
       )}
       onClick={onSelect}
     >
       <div className="h-14 w-14 overflow-hidden rounded-lg bg-slate-100">
-        {listing.primary_image?.url ? <img src={listing.primary_image.url} alt={listing.short_name} className="h-full w-full object-contain" /> : null}
+        {listing.primary_image?.url ? (
+          <img
+            src={listing.primary_image.url}
+            alt={listing.short_name}
+            className="h-full w-full object-contain"
+          />
+        ) : null}
       </div>
       <div className="min-w-0">
         <p className="truncate font-semibold">{listing.short_name}</p>
         <p className="truncate text-xs text-muted">{listing.title}</p>
-        <p className="mt-1 text-xs text-muted">SKU {listing.sku || "None"} / Supplier {listing.supplier?.sku || "Missing"}</p>
-        <p className="mt-1 text-xs text-muted">{counts.options} options / {counts.colors} colors / {counts.printMethods} print methods / {counts.positions} positions</p>
+        <p className="mt-1 text-xs text-muted">
+          SKU {listing.sku || "None"} / Supplier{" "}
+          {listing.supplier?.sku || "Missing"}
+        </p>
+        <p className="mt-1 text-xs text-muted">
+          {counts.options} options / {counts.colors} colors /{" "}
+          {counts.printMethods} print methods / {counts.positions} positions
+        </p>
       </div>
-      <Badge tone={ready ? "success" : "warning"}>{ready ? "Configured" : "Missing Configuration"}</Badge>
+      <Badge tone={ready ? "success" : "warning"}>
+        {ready ? "Configured" : "Missing Configuration"}
+      </Badge>
     </button>
   );
 }
@@ -1438,21 +2246,38 @@ export function OrderLineCard({
       toast.push({ type: "success", title: "Line removed" });
       await onChanged();
     },
-    onError: (error) => toast.push({ type: "error", title: "Delete failed", message: apiMessage(error, "Unable to delete line") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Delete failed",
+        message: apiMessage(error, "Unable to delete line"),
+      }),
   });
   const completeItems = line.items.filter(itemProductionComplete).length;
   return (
-    <section id={`order-line-${line.id}`} className="border-b border-border pb-5">
+    <section
+      id={`order-line-${line.id}`}
+      className="border-b border-border pb-5"
+    >
       <div className="flex flex-col gap-3 py-1 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="font-bold">{line.listing_title}</h2>
           <p className="text-sm text-muted">
-            SKU {line.listing_sku || "None"} / Supplier {line.supplier_sku} / Qty {line.quantity} / {line.personalization_mode}
+            SKU {line.listing_sku || "None"} / Supplier {line.supplier_sku} /
+            Qty {line.quantity} / {line.personalization_mode}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={completeItems === line.items.length ? "success" : "warning"}>{completeItems}/{line.items.length} items complete</Badge>
-          <ActionIconButton tone="delete" label="Delete line" onClick={() => setConfirmDelete(true)}>
+          <Badge
+            tone={completeItems === line.items.length ? "success" : "warning"}
+          >
+            {completeItems}/{line.items.length} items complete
+          </Badge>
+          <ActionIconButton
+            tone="delete"
+            label="Delete line"
+            onClick={() => setConfirmDelete(true)}
+          >
             <HiOutlineTrash className="h-4 w-4" />
           </ActionIconButton>
         </div>
@@ -1514,9 +2339,11 @@ function OrderItemAccordion({
 }) {
   const mainDesign = itemMainDesign(item);
   const complete = itemProductionComplete(item) && Boolean(mainDesign);
-  const hasSubDesign = item.files?.some((file) => file.usage === "sub_design" && file.is_selected);
+  const hasSubDesign = item.files?.some(
+    (file) => file.usage === "sub_design" && file.is_selected,
+  );
   return (
-    <div id={`order-item-${item.id}`} className="bg-white">
+    <div id={`order-item-${item.id}`} className="bg-white p-4">
       <button
         type="button"
         className="flex w-full flex-col gap-2 border-t border-border py-3 text-left md:flex-row md:items-center md:justify-between"
@@ -1525,14 +2352,24 @@ function OrderItemAccordion({
         onClick={() => onToggle(!open)}
       >
         <div>
-          <p className="font-semibold">Item {item.item_number} / Qty {item.quantity}</p>
-          <p className="text-xs text-muted">{supplierConfigSummary(draft) || "Configuration missing"}</p>
+          <p className="font-semibold">
+            Item {item.item_number} / Qty {item.quantity}
+          </p>
+          <p className="text-xs text-muted">
+            {supplierConfigSummary(draft) || "Configuration missing"}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={complete ? "success" : "warning"}>{complete ? "Complete" : "Incomplete"}</Badge>
-          {!mainDesign ? <Badge tone="warning">Main design missing</Badge> : null}
+          <Badge tone={complete ? "success" : "warning"}>
+            {complete ? "Complete" : "Incomplete"}
+          </Badge>
+          {!mainDesign ? (
+            <Badge tone="warning">Main design missing</Badge>
+          ) : null}
           <Badge tone="neutral">{itemMockupCount(item)} mockups</Badge>
-          <HiOutlineChevronDown className={clsx("h-4 w-4 transition", open && "rotate-180")} />
+          <HiOutlineChevronDown
+            className={clsx("h-4 w-4 transition", open && "rotate-180")}
+          />
         </div>
       </button>
       {open ? (
@@ -1541,28 +2378,115 @@ function OrderItemAccordion({
             <div className="grid gap-2.5 xl:border-r xl:border-border xl:pr-4">
               <SectionHeading title="Customer Information" />
               <Field label="Personalization Text">
-                <Textarea rows={1} className="min-h-10 max-h-24 resize-y py-2" placeholder="Enter personalization text" value={draft.personalization_text || ""} onChange={(event) => onDraftChange({ ...draft, personalization_text: event.target.value })} />
+                <Textarea
+                  rows={1}
+                  className="min-h-10 max-h-24 resize-y py-2"
+                  placeholder="Enter personalization text"
+                  value={draft.personalization_text || ""}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      personalization_text: event.target.value,
+                    })
+                  }
+                />
               </Field>
               <Field label="Customer Note">
-                <Textarea rows={1} className="min-h-10 max-h-24 resize-y py-2" placeholder="Optional customer note" value={draft.customer_note || ""} onChange={(event) => onDraftChange({ ...draft, customer_note: event.target.value })} />
+                <Textarea
+                  rows={1}
+                  className="min-h-10 max-h-24 resize-y py-2"
+                  placeholder="Optional customer note"
+                  value={draft.customer_note || ""}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      customer_note: event.target.value,
+                    })
+                  }
+                />
               </Field>
               <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
-                <ProductionFileSlot orderId={order.id} item={item} label="Customer Photos" fileType="customer_photo" usage={null} onChanged={onChanged} />
-                <ProductionFileSlot orderId={order.id} item={item} label="Customer References" fileType="customer_reference" usage={null} onChanged={onChanged} />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Customer Photos"
+                  fileType="customer_photo"
+                  usage={null}
+                  onChanged={onChanged}
+                />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Customer References"
+                  fileType="customer_reference"
+                  usage={null}
+                  onChanged={onChanged}
+                />
               </div>
             </div>
             <div className="grid gap-2.5">
               <SectionHeading title="Production Configuration" />
-              <div id={`supplier-config-${item.id}`} className="grid gap-2.5 md:grid-cols-3">
+              <div
+                id={`supplier-config-${item.id}`}
+                className="grid gap-2.5 md:grid-cols-3"
+              >
                 <Info label="Supplier SKU" value={item.supplier_sku} />
-                <VariantSelect label="Option" values={line.supplier.options} value={draft.option || ""} onChange={(value) => onDraftChange({ ...draft, option: value })} />
-                <VariantSelect label="Color" values={line.supplier.colors} value={draft.color || ""} onChange={(value) => onDraftChange({ ...draft, color: value })} />
-                <VariantSelect label="Print Method" values={line.supplier.print_methods} value={draft.print_method || ""} onChange={(value) => onDraftChange({ ...draft, print_method: value })} />
-                <VariantSelect label="Main Position" values={line.supplier.positions} value={draft.main_position || ""} onChange={(value) => onDraftChange({ ...draft, main_position: value })} />
-                {hasSubDesign ? <VariantSelect label="Sub Position" values={line.supplier.positions} value={draft.sub_position || ""} optional onChange={(value) => onDraftChange({ ...draft, sub_position: value })} /> : null}
+                <VariantSelect
+                  label="Option"
+                  values={line.supplier.options}
+                  value={draft.option || ""}
+                  onChange={(value) =>
+                    onDraftChange({ ...draft, option: value })
+                  }
+                />
+                <VariantSelect
+                  label="Color"
+                  values={line.supplier.colors}
+                  value={draft.color || ""}
+                  onChange={(value) =>
+                    onDraftChange({ ...draft, color: value })
+                  }
+                />
+                <VariantSelect
+                  label="Print Method"
+                  values={line.supplier.print_methods}
+                  value={draft.print_method || ""}
+                  onChange={(value) =>
+                    onDraftChange({ ...draft, print_method: value })
+                  }
+                />
+                <VariantSelect
+                  label="Main Position"
+                  values={line.supplier.positions}
+                  value={draft.main_position || ""}
+                  onChange={(value) =>
+                    onDraftChange({ ...draft, main_position: value })
+                  }
+                />
+                {hasSubDesign ? (
+                  <VariantSelect
+                    label="Sub Position"
+                    values={line.supplier.positions}
+                    value={draft.sub_position || ""}
+                    optional
+                    onChange={(value) =>
+                      onDraftChange({ ...draft, sub_position: value })
+                    }
+                  />
+                ) : null}
               </div>
               <Field label="Production Notice">
-                <Input value={draft.production_notice || ""} onChange={(event) => onDraftChange({ ...draft, production_notice: event.target.value })} />
+                <Input
+                  value={draft.production_notice || ""}
+                  onChange={(event) =>
+                    onDraftChange({
+                      ...draft,
+                      production_notice: event.target.value,
+                    })
+                  }
+                />
               </Field>
               <div className="flex flex-wrap gap-2">
                 {previousItem ? (
@@ -1590,11 +2514,54 @@ function OrderItemAccordion({
           <div className="grid gap-3">
             <SectionHeading title="Designs and Mockups" />
             <div className="flex flex-wrap gap-3">
-              <ProductionFileSlot orderId={order.id} item={item} label="Main Design" fileType="design" usage="main_design" position={draft.main_position} required onChanged={onChanged} />
-              <ProductionFileSlot orderId={order.id} item={item} label="Sub Design" fileType="design" usage="sub_design" position={draft.sub_position} onChanged={onChanged} />
-              <ProductionFileSlot orderId={order.id} item={item} label="Mockup 1" fileType="mockup" usage="mockup" onChanged={onChanged} />
-              <ProductionFileSlot orderId={order.id} item={item} label="Mockup 2" fileType="mockup" usage="mockup2" onChanged={onChanged} />
-              <ProductionFileSlot orderId={order.id} item={item} label="Additional Design" fileType="design" usage="additional_design" onChanged={onChanged} />
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
+                label="Main Design"
+                fileType="design"
+                usage="main_design"
+                position={draft.main_position}
+                required
+                onChanged={onChanged}
+              />
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
+                label="Sub Design"
+                fileType="design"
+                usage="sub_design"
+                position={draft.sub_position}
+                onChanged={onChanged}
+              />
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
+                label="Mockup 1"
+                fileType="mockup"
+                usage="mockup"
+                onChanged={onChanged}
+              />
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
+                label="Mockup 2"
+                fileType="mockup"
+                usage="mockup2"
+                onChanged={onChanged}
+              />
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
+                label="Additional Design"
+                fileType="design"
+                usage="additional_design"
+                onChanged={onChanged}
+              />
             </div>
           </div>
         </div>
@@ -1603,7 +2570,19 @@ function OrderItemAccordion({
   );
 }
 
-function VariantSelect({ label, values, value, optional, onChange }: { label: string; values: string[]; value: string; optional?: boolean; onChange: (value: string) => void }) {
+function VariantSelect({
+  label,
+  values,
+  value,
+  optional,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  value: string;
+  optional?: boolean;
+  onChange: (value: string) => void;
+}) {
   if (values.length === 1) {
     return (
       <Field label={label}>
@@ -1616,10 +2595,21 @@ function VariantSelect({ label, values, value, optional, onChange }: { label: st
       <Field label={label}>
         <div className="flex flex-wrap gap-1.5">
           {optional ? (
-            <button type="button" className={chipClass(!value)} onClick={() => onChange("")}>None</button>
+            <button
+              type="button"
+              className={chipClass(!value)}
+              onClick={() => onChange("")}
+            >
+              None
+            </button>
           ) : null}
           {values.map((item) => (
-            <button key={item} type="button" className={chipClass(value === item)} onClick={() => onChange(item)}>
+            <button
+              key={item}
+              type="button"
+              className={chipClass(value === item)}
+              onClick={() => onChange(item)}
+            >
               {item}
             </button>
           ))}
@@ -1631,7 +2621,11 @@ function VariantSelect({ label, values, value, optional, onChange }: { label: st
     <Field label={label}>
       <Select value={value} onChange={(event) => onChange(event.target.value)}>
         <option value="">{optional ? "None" : "Select"}</option>
-        {values.map((item) => <option key={item} value={item}>{item}</option>)}
+        {values.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
       </Select>
     </Field>
   );
@@ -1640,12 +2634,15 @@ function VariantSelect({ label, values, value, optional, onChange }: { label: st
 function chipClass(active: boolean) {
   return clsx(
     "rounded-full border px-2.5 py-1 text-xs font-semibold transition",
-    active ? "border-blue-700 bg-blue-700 text-white" : "border-border bg-white text-slate-700 hover:bg-slate-50",
+    active
+      ? "border-blue-700 bg-blue-700 text-white"
+      : "border-border bg-white text-slate-700 hover:bg-slate-50",
   );
 }
 
 function ProductionFileSlot({
   orderId,
+  listingId,
   item,
   label,
   fileType,
@@ -1655,6 +2652,7 @@ function ProductionFileSlot({
   onChanged,
 }: {
   orderId: string;
+  listingId: string;
   item: OrderItem;
   label: string;
   fileType: string;
@@ -1665,12 +2663,23 @@ function ProductionFileSlot({
 }) {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<{ file: OrderItemFile; url?: string } | null>(null);
-  const [localPreview, setLocalPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    file: OrderItemFile;
+    url?: string;
+  } | null>(null);
+  const [localPreview, setLocalPreview] = useState<{
+    url: string;
+    mime: string;
+    name: string;
+  } | null>(null);
+  const [urlOpen, setUrlOpen] = useState(false);
+  const [listingOpen, setListingOpen] = useState(false);
+  const canChooseListingImage = fileType === "mockup" && Boolean(listingId);
   const selected = item.files?.find((file) =>
     usage === null
       ? file.file_type === fileType
-      : file.usage === usage && (file.is_selected || usage === "additional_design"),
+      : file.usage === usage &&
+        (file.is_selected || usage === "additional_design"),
   );
   const add = useMutation({
     mutationFn: (file: File) =>
@@ -1684,7 +2693,33 @@ function ProductionFileSlot({
       toast.push({ type: "success", title: `${label} saved` });
       await onChanged();
     },
-    onError: (error) => toast.push({ type: "error", title: `${label} failed`, message: apiMessage(error, "Unable to save file") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: `${label} failed`,
+        message: apiMessage(error, "Unable to save file"),
+      }),
+  });
+  const addFromUrl = useMutation({
+    mutationFn: (url: string) =>
+      orderApi.addItemFileFromUrl(orderId, item.id, {
+        file_type: fileType,
+        usage,
+        position: position || undefined,
+        url,
+      }),
+    onSuccess: async () => {
+      toast.push({ type: "success", title: `${label} saved` });
+      setUrlOpen(false);
+      setListingOpen(false);
+      await onChanged();
+    },
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: `${label} failed`,
+        message: apiMessage(error, "Unable to save file from URL"),
+      }),
   });
   const remove = useMutation({
     mutationFn: (fileId: string) => orderApi.deleteItemFile(item.id, fileId),
@@ -1692,26 +2727,48 @@ function ProductionFileSlot({
       toast.push({ type: "success", title: `${label} removed` });
       await onChanged();
     },
-    onError: (error) => toast.push({ type: "error", title: "Delete failed", message: apiMessage(error, "Unable to delete file") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Delete failed",
+        message: apiMessage(error, "Unable to delete file"),
+      }),
   });
   function handleFiles(files: FileList | File[]) {
     const file = Array.from(files)[0];
     if (file) {
       if (localPreview) URL.revokeObjectURL(localPreview.url);
-      setLocalPreview({ url: URL.createObjectURL(file), mime: file.type, name: file.name });
+      setLocalPreview({
+        url: URL.createObjectURL(file),
+        mime: file.type,
+        name: file.name,
+      });
       add.mutate(file);
     }
   }
-  useEffect(() => () => {
-    if (localPreview) URL.revokeObjectURL(localPreview.url);
-  }, [localPreview]);
+  useEffect(
+    () => () => {
+      if (localPreview) URL.revokeObjectURL(localPreview.url);
+    },
+    [localPreview],
+  );
   function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     handleFiles(event.dataTransfer.files);
   }
   return (
-    <div className="w-[96px]" onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
-      <p className="mb-1 truncate text-xs font-semibold text-slate-700" title={label}>{label}{required ? " *" : ""}</p>
+    <div
+      className="w-[96px]"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={onDrop}
+    >
+      <p
+        className="mb-1 truncate text-xs font-semibold text-slate-700"
+        title={label}
+      >
+        {label}
+        {required ? " *" : ""}
+      </p>
       <input
         ref={inputRef}
         type="file"
@@ -1726,18 +2783,28 @@ function ProductionFileSlot({
         type="button"
         className={clsx(
           "group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded border bg-white text-slate-500 transition",
-          selected ? "border-border hover:border-blue-700" : "border-dashed border-slate-300 hover:border-blue-700 hover:text-blue-700",
+          selected
+            ? "border-border hover:border-blue-700"
+            : "border-dashed border-slate-300 hover:border-blue-700 hover:text-blue-700",
         )}
         aria-label={`${selected ? "Replace" : "Upload"} ${label}`}
-        disabled={add.isPending}
+        disabled={add.isPending || addFromUrl.isPending}
         onClick={() => inputRef.current?.click()}
       >
-        {add.isPending ? (
-          <Spinner label="Uploading" />
+        {add.isPending || addFromUrl.isPending ? (
+          <Spinner label="Saving" />
         ) : selected?.url && selected.mime_type.startsWith("image/") ? (
-          <img src={selected.url} alt={selected.original_name} className="h-full w-full object-contain" />
+          <img
+            src={selected.url}
+            alt={selected.original_name}
+            className="h-full w-full object-contain"
+          />
         ) : localPreview?.mime.startsWith("image/") ? (
-          <img src={localPreview.url} alt={localPreview.name} className="h-full w-full object-contain" />
+          <img
+            src={localPreview.url}
+            alt={localPreview.name}
+            className="h-full w-full object-contain"
+          />
         ) : selected ? (
           <FileGlyph file={selected} />
         ) : (
@@ -1752,12 +2819,37 @@ function ProductionFileSlot({
       <div className="mt-1 min-h-8">
         {selected ? (
           <>
-            <p className="truncate text-[11px] text-muted" title={selected.original_name}>{selected.original_name}</p>
+            <p
+              className="truncate text-[11px] text-muted"
+              title={selected.original_name}
+            >
+              {selected.original_name}
+            </p>
             <div className="mt-1 flex items-center gap-1">
-              <button type="button" className="rounded p-1 text-muted hover:bg-slate-100" aria-label={`Preview ${label}`} onClick={() => setPreview({ file: selected, url: selected.url || localPreview?.url })}>
+              <button
+                type="button"
+                className="rounded p-1 text-muted hover:bg-slate-100"
+                aria-label={`Preview ${label}`}
+                onClick={() =>
+                  setPreview({
+                    file: selected,
+                    url: selected.url || localPreview?.url,
+                  })
+                }
+              >
                 <HiOutlineEye className="h-3.5 w-3.5" />
               </button>
-              <a className={clsx("rounded p-1 text-muted hover:bg-slate-100", !selected.url && "pointer-events-none opacity-40")} aria-label={`Download ${label}`} href={selected.url || "#"} target="_blank" rel="noreferrer" title={selected.url ? "Open file" : "File URL is not available"}>
+              <a
+                className={clsx(
+                  "rounded p-1 text-muted hover:bg-slate-100",
+                  !selected.url && "pointer-events-none opacity-40",
+                )}
+                aria-label={`Download ${label}`}
+                href={selected.url || "#"}
+                target="_blank"
+                rel="noreferrer"
+                title={selected.url ? "Open file" : "File URL is not available"}
+              >
                 <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
               </a>
               <button
@@ -1772,17 +2864,161 @@ function ProductionFileSlot({
             </div>
           </>
         ) : (
-          <p className={clsx("text-[11px]", required ? "text-amber-700" : "text-muted")}>{required ? "Required" : "Optional"}</p>
+          <p
+            className={clsx(
+              "text-[11px]",
+              required ? "text-amber-700" : "text-muted",
+            )}
+          >
+            {required ? "Required" : "Optional"}
+          </p>
         )}
+        <div className="mt-1 flex items-center gap-1">
+          <button
+            type="button"
+            className="rounded p-1 text-muted hover:bg-slate-100 disabled:opacity-40"
+            aria-label={`Add ${label} from URL`}
+            title="Add from URL"
+            disabled={add.isPending || addFromUrl.isPending}
+            onClick={() => setUrlOpen(true)}
+          >
+            <HiOutlineLink className="h-3.5 w-3.5" />
+          </button>
+          {canChooseListingImage ? (
+            <button
+              type="button"
+              className="rounded p-1 text-muted hover:bg-slate-100 disabled:opacity-40"
+              aria-label={`Choose ${label} from listing images`}
+              title="Choose from listing"
+              disabled={add.isPending || addFromUrl.isPending}
+              onClick={() => setListingOpen(true)}
+            >
+              <HiOutlinePhoto className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
       </div>
-      {preview ? <FilePreviewModal file={preview.file} url={preview.url} onClose={() => setPreview(null)} /> : null}
+      {preview ? (
+        <FilePreviewModal
+          file={preview.file}
+          url={preview.url}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
+      {urlOpen ? (
+        <ImageUrlDialog
+          title={`Add ${label} from URL`}
+          loading={addFromUrl.isPending}
+          onClose={() => setUrlOpen(false)}
+          onSubmit={(url) => addFromUrl.mutate(url)}
+        />
+      ) : null}
+      {listingOpen ? (
+        <ListingImagePickerDialog
+          listingId={listingId}
+          loading={addFromUrl.isPending}
+          onClose={() => setListingOpen(false)}
+          onSelect={(url) => addFromUrl.mutate(url)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function FileGlyph({ file }: { file: Pick<OrderItemFile, "mime_type" | "original_name"> }) {
+function ImageUrlDialog({
+  title,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  title: string;
+  loading: boolean;
+  onClose: () => void;
+  onSubmit: (url: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const trimmed = url.trim();
+  return (
+    <Modal title={title} onClose={loading ? () => undefined : onClose} width="max-w-lg">
+      <div className="grid gap-4">
+        <Field label="Image URL">
+          <Input
+            type="url"
+            value={url}
+            placeholder="https://example.com/image.jpg"
+            onChange={(event) => setUrl(event.target.value)}
+          />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={loading} onClick={onClose}>Cancel</Button>
+          <Button type="button" disabled={!trimmed || loading} onClick={() => onSubmit(trimmed)}>
+            {loading ? <Spinner label="Saving" /> : "Fetch Image"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ListingImagePickerDialog({
+  listingId,
+  loading,
+  onClose,
+  onSelect,
+}: {
+  listingId: string;
+  loading: boolean;
+  onClose: () => void;
+  onSelect: (url: string) => void;
+}) {
+  const images = useQuery({
+    queryKey: ["listing-images", listingId],
+    queryFn: () => imageApi.list(listingId),
+    enabled: Boolean(listingId),
+  });
+  const items = images.data || [];
+  return (
+    <Modal title="Choose mockup from listing" onClose={loading ? () => undefined : onClose} width="max-w-3xl">
+      <div className="grid gap-4">
+        {images.isLoading ? <Spinner label="Loading images" /> : null}
+        {images.isError ? <ErrorState title="Images unavailable" message="Unable to load listing images." /> : null}
+        {!images.isLoading && !items.length ? <EmptyState title="No listing images" message="Upload images on the product listing first." /> : null}
+        <div className="grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 md:grid-cols-4">
+          {items.map((image) => (
+            <button
+              key={image.id}
+              type="button"
+              className="group overflow-hidden rounded border border-border bg-white text-left transition hover:border-blue-700 disabled:opacity-60"
+              disabled={loading}
+              onClick={() => onSelect(image.url)}
+            >
+              <div className="aspect-square bg-slate-50">
+                <img src={image.url} alt={image.original_filename} className="h-full w-full object-contain" />
+              </div>
+              <div className="border-t border-border p-2">
+                <p className="truncate text-xs font-semibold">{image.original_filename}</p>
+                <p className="text-[11px] text-muted">{image.width || "-"} x {image.height || "-"}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <Button type="button" variant="secondary" disabled={loading} onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function FileGlyph({
+  file,
+}: {
+  file: Pick<OrderItemFile, "mime_type" | "original_name">;
+}) {
   const isImage = file.mime_type?.startsWith("image/");
-  const isPdf = file.mime_type === "application/pdf" || file.original_name.toLowerCase().endsWith(".pdf");
+  const isPdf =
+    file.mime_type === "application/pdf" ||
+    file.original_name.toLowerCase().endsWith(".pdf");
   if (isImage) return <HiOutlinePhoto className="h-6 w-6" />;
   if (isPdf) return <HiOutlineDocument className="h-6 w-6" />;
   return <HiOutlineDocument className="h-6 w-6" />;
@@ -1808,51 +3044,85 @@ function FilePreviewModal({
   onClose: () => void;
 }) {
   const isImage = file.mime_type?.startsWith("image/");
-  const isPdf = file.mime_type === "application/pdf" || file.original_name.toLowerCase().endsWith(".pdf");
+  const isPdf =
+    file.mime_type === "application/pdf" ||
+    file.original_name.toLowerCase().endsWith(".pdf");
   return (
     <Modal title="File preview" onClose={onClose} width="max-w-3xl">
       <div className="grid gap-4">
         <div className="flex max-h-[70vh] min-h-64 items-center justify-center rounded border border-border bg-slate-50 text-slate-500">
           {url && isImage ? (
-            <img src={url} alt={file.original_name} className="max-h-[68vh] max-w-full object-contain" />
+            <img
+              src={url}
+              alt={file.original_name}
+              className="max-h-[68vh] max-w-full object-contain"
+            />
           ) : url && isPdf ? (
-            <iframe src={url} title={file.original_name} className="h-[68vh] w-full" />
+            <iframe
+              src={url}
+              title={file.original_name}
+              className="h-[68vh] w-full"
+            />
           ) : (
             <div className="grid justify-items-center gap-2">
               <FileGlyph file={file} />
-              <p className="text-sm text-muted">Preview URL is not available.</p>
+              <p className="text-sm text-muted">
+                Preview URL is not available.
+              </p>
             </div>
           )}
         </div>
         <div>
           <p className="font-semibold">{file.original_name}</p>
-          {itemReference ? <p className="text-sm text-muted">{itemReference}</p> : null}
-          <p className="text-sm text-muted">{file.mime_type} / {formatFileSize(file.size)}</p>
+          {itemReference ? (
+            <p className="text-sm text-muted">{itemReference}</p>
+          ) : null}
+          <p className="text-sm text-muted">
+            {file.mime_type} / {formatFileSize(file.size)}
+          </p>
         </div>
         <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap justify-between gap-2 border-t border-border bg-surface px-5 py-4">
           <div className="flex gap-2">
             {onPrevious || onNext ? (
               <>
-                <Button type="button" variant="secondary" disabled={!hasPrevious} onClick={onPrevious}>Previous</Button>
-                <Button type="button" variant="secondary" disabled={!hasNext} onClick={onNext}>Next</Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!hasPrevious}
+                  onClick={onPrevious}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={!hasNext}
+                  onClick={onNext}
+                >
+                  Next
+                </Button>
               </>
             ) : null}
           </div>
           <div className="flex gap-2">
-          <Button type="button" variant="secondary" onClick={onClose}>Close</Button>
-          <a
-            className={clsx(
-              "inline-flex h-10 items-center gap-2 rounded-[10px] border border-border bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50",
-              !url && "pointer-events-none opacity-40",
-            )}
-            href={url || "#"}
-            target="_blank"
-            rel="noreferrer"
-            title={url ? "Open file in a new tab" : "File URL is not available"}
-          >
-            <HiOutlineArrowDownTray />
-            Download
-          </a>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+            <a
+              className={clsx(
+                "inline-flex h-10 items-center gap-2 rounded-[10px] border border-border bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50",
+                !url && "pointer-events-none opacity-40",
+              )}
+              href={url || "#"}
+              target="_blank"
+              rel="noreferrer"
+              title={
+                url ? "Open file in a new tab" : "File URL is not available"
+              }
+            >
+              <HiOutlineArrowDownTray />
+              Download
+            </a>
           </div>
         </div>
       </div>
@@ -1860,11 +3130,22 @@ function FilePreviewModal({
   );
 }
 
-export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChanged: () => void }) {
+export function ShippingLabelPanel({
+  order,
+  onChanged,
+}: {
+  order: Order;
+  onChanged: () => void;
+}) {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [localPreview, setLocalPreview] = useState<{ url: string; mime: string; name: string; size: number } | null>(null);
+  const [localPreview, setLocalPreview] = useState<{
+    url: string;
+    mime: string;
+    name: string;
+    size: number;
+  } | null>(null);
   const active = activeShippingLabel(order);
   const upload = useMutation({
     mutationFn: (file: File) => orderApi.uploadShippingLabel(order.id, file),
@@ -1872,16 +3153,29 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
       toast.push({ type: "success", title: "Shipping label saved" });
       await onChanged();
     },
-    onError: (error) => toast.push({ type: "error", title: "Label failed", message: apiMessage(error, "Unable to save shipping label") }),
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Label failed",
+        message: apiMessage(error, "Unable to save shipping label"),
+      }),
   });
-  useEffect(() => () => {
-    if (localPreview) URL.revokeObjectURL(localPreview.url);
-  }, [localPreview]);
+  useEffect(
+    () => () => {
+      if (localPreview) URL.revokeObjectURL(localPreview.url);
+    },
+    [localPreview],
+  );
   return (
     <section id="shipping-label-section" className="grid gap-3 pb-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-bold">Shipping Label</h2>
-        <Button type="button" variant="secondary" disabled={upload.isPending} onClick={() => inputRef.current?.click()}>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={upload.isPending}
+          onClick={() => inputRef.current?.click()}
+        >
           <HiOutlineCloudArrowUp />
           {active ? "Replace" : "Upload"}
         </Button>
@@ -1896,7 +3190,12 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
           const file = event.target.files?.[0];
           if (file) {
             if (localPreview) URL.revokeObjectURL(localPreview.url);
-            setLocalPreview({ url: URL.createObjectURL(file), mime: file.type, name: file.name, size: file.size });
+            setLocalPreview({
+              url: URL.createObjectURL(file),
+              mime: file.type,
+              name: file.name,
+              size: file.size,
+            });
             upload.mutate(file);
           }
           event.target.value = "";
@@ -1910,15 +3209,30 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
             </span>
             <div className="min-w-0">
               <p className="truncate font-semibold">{active.original_name}</p>
-              <p className="text-xs text-muted">Version {active.version} / Uploaded {formatDateTime(active.uploaded_at)}</p>
+              <p className="text-xs text-muted">
+                Version {active.version} / Uploaded{" "}
+                {formatDateTime(active.uploaded_at)}
+              </p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="secondary" onClick={() => setPreviewOpen(true)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => setPreviewOpen(true)}
+            >
               <HiOutlineEye />
               Preview
             </Button>
-            <Button type="button" size="sm" variant="secondary" onClick={() => inputRef.current?.click()}>Replace</Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => inputRef.current?.click()}
+            >
+              Replace
+            </Button>
           </div>
         </div>
       ) : (
@@ -1927,7 +3241,11 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
           Shipping label required before sending to supplier.
         </p>
       )}
-      {order.shipping_labels && order.shipping_labels.length > 1 ? <ShippingLabelHistory labels={order.shipping_labels.filter((label) => !label.is_active)} /> : null}
+      {order.shipping_labels && order.shipping_labels.length > 1 ? (
+        <ShippingLabelHistory
+          labels={order.shipping_labels.filter((label) => !label.is_active)}
+        />
+      ) : null}
       {active && previewOpen ? (
         <FilePreviewModal
           file={{
@@ -1938,7 +3256,10 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
             sort_order: active.version,
             is_selected: active.is_active,
             original_name: active.original_name,
-            mime_type: active.mime_type || localPreview?.mime || "application/octet-stream",
+            mime_type:
+              active.mime_type ||
+              localPreview?.mime ||
+              "application/octet-stream",
             size: localPreview?.size || active.size,
             created_at: active.uploaded_at,
           }}
@@ -1953,7 +3274,9 @@ export function ShippingLabelPanel({ order, onChanged }: { order: Order; onChang
 function ShippingLabelHistory({ labels }: { labels: ShippingLabel[] }) {
   return (
     <details>
-      <summary className="cursor-pointer text-sm font-semibold">View previous labels ({labels.length})</summary>
+      <summary className="cursor-pointer text-sm font-semibold">
+        View previous labels ({labels.length})
+      </summary>
       <div className="mt-3 overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <thead className="text-xs uppercase text-muted">
@@ -1971,8 +3294,12 @@ function ShippingLabelHistory({ labels }: { labels: ShippingLabel[] }) {
                 <td className="py-2 pr-4">v{label.version}</td>
                 <td className="py-2 pr-4">{label.original_name}</td>
                 <td className="py-2 pr-4">{label.status}</td>
-                <td className="py-2 pr-4">{formatDateTime(label.uploaded_at)}</td>
-                <td className="py-2 pr-4">{formatDateTime(label.replaced_at)}</td>
+                <td className="py-2 pr-4">
+                  {formatDateTime(label.uploaded_at)}
+                </td>
+                <td className="py-2 pr-4">
+                  {formatDateTime(label.replaced_at)}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1991,7 +3318,9 @@ function ActivityItem({ activity }: { activity: OrderActivity }) {
       <div className="min-w-0">
         <p className="text-sm font-semibold">{activity.message}</p>
         <p className="text-xs text-muted">
-          {activity.actor?.full_name || "System"} / {activity.activity_type.split("_").join(" ")} / {formatDateTime(activity.created_at)}
+          {activity.actor?.full_name || "System"} /{" "}
+          {activity.activity_type.split("_").join(" ")} /{" "}
+          {formatDateTime(activity.created_at)}
         </p>
       </div>
     </div>
@@ -2001,12 +3330,22 @@ function ActivityItem({ activity }: { activity: OrderActivity }) {
 export function BackToOrders() {
   return (
     <Link to="/app/orders">
-      <Button type="button" variant="secondary"><HiOutlineArrowLeft /> Back to Orders</Button>
+      <Button type="button" variant="secondary">
+        <HiOutlineArrowLeft /> Back to Orders
+      </Button>
     </Link>
   );
 }
 
-export function Info({ label, value, copyValue }: { label: string; value: string; copyValue?: string }) {
+export function Info({
+  label,
+  value,
+  copyValue,
+}: {
+  label: string;
+  value: string;
+  copyValue?: string;
+}) {
   const toast = useToast();
   return (
     <div>
@@ -2032,7 +3371,11 @@ export function Info({ label, value, copyValue }: { label: string; value: string
 }
 
 function SectionHeading({ title }: { title: string }) {
-  return <h3 className="border-b border-border pb-2 text-sm font-bold text-foreground">{title}</h3>;
+  return (
+    <h3 className="border-b border-border pb-2 text-sm font-bold text-foreground">
+      {title}
+    </h3>
+  );
 }
 
 export function OrderSearchIcon() {

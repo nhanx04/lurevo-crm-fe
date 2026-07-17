@@ -95,6 +95,8 @@ export const orderApi = {
   itemFiles: (itemId: string) => apiGet<OrderItemFile[]>(`/order-items/${itemId}/files`),
   addItemFile: (orderId: string, itemId: string, body: { file: FileMetadataRequest; file_type: string; usage?: string | null; position?: string | null }) =>
     apiPost<OrderItemFile>(`/orders/${orderId}/items/${itemId}/files`, body),
+  addItemFileFromUrl: (orderId: string, itemId: string, body: { url: string; file_type: string; usage?: string | null; position?: string | null }) =>
+    apiPost<OrderItemFile>(`/orders/${orderId}/items/${itemId}/files`, body),
   uploadItemFile: (orderId: string, itemId: string, body: { file: File; file_type: string; usage?: string | null; position?: string | null }) => {
     const form = new FormData();
     form.append('file', body.file);
