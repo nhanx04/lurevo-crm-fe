@@ -1,7 +1,8 @@
-import { ChangeEvent, ReactNode, useMemo, useState } from "react";
+import { ChangeEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HiOutlineCheck,
+  HiOutlineChevronRight,
   HiOutlineCloudArrowUp,
   HiOutlineEllipsisVertical,
   HiOutlineFolder,
@@ -11,7 +12,7 @@ import clsx from "clsx";
 import { queryKeys } from "@/api/queryKeys";
 import { designLibraryApi } from "@/api/services";
 import { Badge, Button, Field, Input, SearchInput, Switch, Textarea } from "@/components/ui";
-import { EmptyState, ErrorState, Spinner, useToast } from "@/components/feedback";
+import { EmptyState, ErrorState, SkeletonRows, Spinner, useToast } from "@/components/feedback";
 import { Modal } from "@/components/layout";
 import { formatFileSize } from "@/utils/format";
 import type { DesignAsset, DesignFolder, DesignFolderBreadcrumb, DesignLibraryParams } from "@/types/api";
@@ -126,14 +127,23 @@ export function DesignLibraryBreadcrumbs({
 }) {
   return (
     <nav className="flex min-w-0 flex-wrap items-center gap-1 text-sm" aria-label="Design Library breadcrumbs">
-      {breadcrumbs.map((crumb, index) => (
+      {breadcrumbs.map((crumb, index) => {
+        const current = index === breadcrumbs.length - 1;
+        return (
         <span key={`${crumb.id || "root"}-${index}`} className="flex min-w-0 items-center gap-1">
           {index > 0 ? <span className="text-muted">/</span> : null}
-          <button type="button" className="max-w-[180px] truncate rounded px-1 font-semibold text-blue-700 hover:bg-blue-50" onClick={() => onOpen(crumb.id || null)}>
-            {crumb.name}
-          </button>
+          {current ? (
+            <span className="max-w-[220px] truncate rounded px-1 font-semibold text-foreground" title={crumb.name}>
+              {crumb.name}
+            </span>
+          ) : (
+            <button type="button" className="max-w-[180px] truncate rounded px-1 font-semibold text-blue-700 hover:bg-blue-50" title={crumb.name} onClick={() => onOpen(crumb.id || null)}>
+              {crumb.name}
+            </button>
+          )}
         </span>
-      ))}
+        );
+      })}
     </nav>
   );
 }
@@ -142,6 +152,8 @@ export function DesignLibraryGrid({
   folders,
   assets,
   selectedAssetId,
+  variant = "page",
+  search,
   onOpenFolder,
   onPreview,
   onEditAsset,
@@ -153,10 +165,14 @@ export function DesignLibraryGrid({
   onDeleteAsset,
   onDeleteFolder,
   onSelectAsset,
+  onCreateFolder,
+  onUploadAsset,
 }: {
   folders: DesignFolder[];
   assets: DesignAsset[];
   selectedAssetId?: string | null;
+  variant?: "page" | "picker";
+  search?: string;
   onOpenFolder: (folder: DesignFolder) => void;
   onPreview: (asset: DesignAsset) => void;
   onEditAsset?: (asset: DesignAsset) => void;
@@ -168,75 +184,301 @@ export function DesignLibraryGrid({
   onDeleteAsset?: (asset: DesignAsset) => void;
   onDeleteFolder?: (folder: DesignFolder) => void;
   onSelectAsset?: (asset: DesignAsset) => void;
+  onCreateFolder?: () => void;
+  onUploadAsset?: () => void;
 }) {
   if (!folders.length && !assets.length) {
-    return <EmptyState title="No designs here" message="Create a folder or upload a design to start building the library." />;
+    if (search?.trim()) {
+      return <EmptyState title={`No folders or designs match "${search.trim()}"`} message="Try a different search or status filter." />;
+    }
+    return (
+      <EmptyState
+        title="This folder is empty."
+        message="Create a folder or upload a design to get started."
+        action={
+          variant === "page" ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              {onCreateFolder ? <Button type="button" variant="secondary" onClick={onCreateFolder}>New Folder</Button> : null}
+              {onUploadAsset ? <Button type="button" onClick={onUploadAsset}>Upload Design</Button> : null}
+            </div>
+          ) : undefined
+        }
+      />
+    );
   }
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
+    <div className="grid gap-8">
+      {folders.length ? (
+        <LibrarySection title="Folders" count={folders.length}>
+          <FolderGrid
+            folders={folders}
+            variant={variant}
+            onOpenFolder={onOpenFolder}
+            onEditFolder={variant === "page" ? onEditFolder : undefined}
+            onMoveFolder={variant === "page" ? onMoveFolder : undefined}
+            onToggleFolder={variant === "page" ? onToggleFolder : undefined}
+            onDeleteFolder={variant === "page" ? onDeleteFolder : undefined}
+          />
+        </LibrarySection>
+      ) : null}
+      {assets.length ? (
+        <LibrarySection title="Designs" count={assets.length}>
+          <DesignGrid
+            assets={assets}
+            selectedAssetId={selectedAssetId}
+            onPreview={onPreview}
+            onEditAsset={onEditAsset}
+            onMoveAsset={onMoveAsset}
+            onToggleAsset={onToggleAsset}
+            onDeleteAsset={onDeleteAsset}
+            onSelectAsset={onSelectAsset}
+          />
+        </LibrarySection>
+      ) : (
+        <LibrarySection title="Designs" count={0}>
+          <EmptyState
+            title={search?.trim() ? "No designs match this search." : "No designs in this folder."}
+            message={search?.trim() ? "Matching folders are shown above." : "Upload a design to start building your library."}
+            action={variant === "page" && onUploadAsset ? <Button type="button" onClick={onUploadAsset}>Upload Design</Button> : undefined}
+          />
+        </LibrarySection>
+      )}
+    </div>
+  );
+}
+
+function LibrarySection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+  return (
+    <section className="grid gap-3" aria-label={title}>
+      <div className="flex items-center gap-2">
+        <h2 className="text-sm font-bold text-foreground">{title}</h2>
+        <span className="text-sm text-muted">· {count}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function FolderGrid({
+  folders,
+  variant,
+  onOpenFolder,
+  onEditFolder,
+  onMoveFolder,
+  onToggleFolder,
+  onDeleteFolder,
+}: {
+  folders: DesignFolder[];
+  variant: "page" | "picker";
+  onOpenFolder: (folder: DesignFolder) => void;
+  onEditFolder?: (folder: DesignFolder) => void;
+  onMoveFolder?: (folder: DesignFolder) => void;
+  onToggleFolder?: (folder: DesignFolder) => void;
+  onDeleteFolder?: (folder: DesignFolder) => void;
+}) {
+  return (
+    <div className={clsx("grid gap-3", variant === "page" ? "grid-cols-[repeat(auto-fill,minmax(240px,300px))]" : "grid-cols-[repeat(auto-fill,minmax(210px,1fr))]")}>
       {folders.map((folder) => (
-        <button
+        <FolderCard
           key={folder.id}
-          type="button"
-          className="group rounded-lg border border-border bg-white p-3 text-left shadow-sm transition hover:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          onDoubleClick={() => onOpenFolder(folder)}
-          onClick={() => undefined}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
-              <HiOutlineFolder className="h-7 w-7" />
-            </span>
-            <EntryMenu>
-              <MenuButton onClick={() => onOpenFolder(folder)}>Open</MenuButton>
-              {onEditFolder ? <MenuButton onClick={() => onEditFolder(folder)}>Rename</MenuButton> : null}
-              {onMoveFolder ? <MenuButton onClick={() => onMoveFolder(folder)}>Move</MenuButton> : null}
-              {onToggleFolder ? <MenuButton onClick={() => onToggleFolder(folder)}>{folder.is_active ? "Deactivate" : "Activate"}</MenuButton> : null}
-              {onDeleteFolder ? <MenuButton danger onClick={() => onDeleteFolder(folder)}>Delete</MenuButton> : null}
-            </EntryMenu>
-          </div>
-          <p className="mt-3 truncate text-sm font-bold">{folder.name}</p>
-          <p className="mt-1 text-xs text-muted">{folder.child_folder_count} folders / {folder.design_count} designs</p>
-          {!folder.is_active ? <Badge tone="warning" className="mt-2">Inactive</Badge> : null}
-        </button>
-      ))}
-      {assets.map((asset) => (
-        <button
-          key={asset.id}
-          type="button"
-          className={clsx("group rounded-lg border bg-white p-2 text-left shadow-sm transition hover:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500", selectedAssetId === asset.id ? "border-blue-700 ring-2 ring-blue-100" : "border-border", !asset.is_active && "opacity-65")}
-          onClick={() => onSelectAsset?.(asset)}
-          onDoubleClick={() => onPreview(asset)}
-        >
-          <div className="relative">
-            <DesignThumbnail asset={asset} />
-            <div className="absolute right-1 top-1">
-              <EntryMenu>
-                <MenuButton onClick={() => onPreview(asset)}>Preview</MenuButton>
-                {asset.file.download_url ? <MenuLink href={asset.file.download_url}>Download</MenuLink> : null}
-                {onEditAsset ? <MenuButton onClick={() => onEditAsset(asset)}>Edit</MenuButton> : null}
-                {onMoveAsset ? <MenuButton onClick={() => onMoveAsset(asset)}>Move</MenuButton> : null}
-                {onToggleAsset ? <MenuButton onClick={() => onToggleAsset(asset)}>{asset.is_active ? "Deactivate" : "Activate"}</MenuButton> : null}
-                {onDeleteAsset ? <MenuButton danger onClick={() => onDeleteAsset(asset)}>Delete</MenuButton> : null}
-              </EntryMenu>
-            </div>
-            {selectedAssetId === asset.id ? <span className="absolute left-1 top-1 rounded-full bg-blue-700 p-1 text-white"><HiOutlineCheck className="h-4 w-4" /></span> : null}
-          </div>
-          <p className="mt-2 truncate text-sm font-bold" title={asset.name}>{asset.name}</p>
-          <p className="truncate text-xs text-muted">{asset.file.mime_type} / {formatFileSize(asset.file.size)}</p>
-          <div className="mt-2 flex items-center gap-1">
-            <Badge tone={asset.is_active ? "success" : "warning"}>{asset.is_active ? "Active" : "Inactive"}</Badge>
-          </div>
-        </button>
+          folder={folder}
+          variant={variant}
+          onOpen={() => onOpenFolder(folder)}
+          onEdit={onEditFolder ? () => onEditFolder(folder) : undefined}
+          onMove={onMoveFolder ? () => onMoveFolder(folder) : undefined}
+          onToggle={onToggleFolder ? () => onToggleFolder(folder) : undefined}
+          onDelete={onDeleteFolder ? () => onDeleteFolder(folder) : undefined}
+        />
       ))}
     </div>
   );
 }
 
-function EntryMenu({ children }: { children: ReactNode }) {
+function FolderCard({
+  folder,
+  variant,
+  onOpen,
+  onEdit,
+  onMove,
+  onToggle,
+  onDelete,
+}: {
+  folder: DesignFolder;
+  variant: "page" | "picker";
+  onOpen: () => void;
+  onEdit?: () => void;
+  onMove?: () => void;
+  onToggle?: () => void;
+  onDelete?: () => void;
+}) {
+  const inactive = !folder.is_active;
+  const metadata = `${folder.child_folder_count} folders · ${folder.design_count} designs`;
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onOpen();
+  };
+  const hasMenu = variant === "page" && (onEdit || onMove || onToggle || onDelete);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Open folder ${folder.name}`}
+      className={clsx(
+        "group flex cursor-pointer items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-left shadow-sm transition duration-200 hover:-translate-y-px hover:border-amber-400 hover:bg-amber-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+        variant === "picker" ? "min-h-[76px]" : "min-h-[92px]",
+        inactive && "opacity-70",
+      )}
+      onClick={onOpen}
+      onKeyDown={onKeyDown}
+    >
+      <span className={clsx("flex shrink-0 items-center justify-center rounded-xl border border-amber-200 bg-amber-100 text-amber-700", variant === "picker" ? "h-11 w-11" : "h-12 w-12")}>
+        <HiOutlineFolder className={clsx(variant === "picker" ? "h-7 w-7" : "h-8 w-8")} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-bold text-slate-900" title={folder.name}>{folder.name}</span>
+        <span className="mt-1 block truncate text-xs text-muted">{metadata}</span>
+        {inactive ? <Badge tone="warning" className="mt-2">Inactive</Badge> : null}
+      </span>
+      {hasMenu ? (
+        <EntryMenu label={`More actions for ${folder.name}`}>
+          {onEdit ? <MenuButton onClick={onEdit}>Rename</MenuButton> : null}
+          {onMove ? <MenuButton onClick={onMove}>Move</MenuButton> : null}
+          {onToggle ? <MenuButton onClick={onToggle}>{folder.is_active ? "Deactivate" : "Activate"}</MenuButton> : null}
+          {onDelete ? <MenuButton danger onClick={onDelete}>Delete</MenuButton> : null}
+        </EntryMenu>
+      ) : (
+        <HiOutlineChevronRight className="h-5 w-5 shrink-0 text-amber-700" />
+      )}
+    </div>
+  );
+}
+
+function DesignGrid({
+  assets,
+  selectedAssetId,
+  onPreview,
+  onEditAsset,
+  onMoveAsset,
+  onToggleAsset,
+  onDeleteAsset,
+  onSelectAsset,
+}: {
+  assets: DesignAsset[];
+  selectedAssetId?: string | null;
+  onPreview: (asset: DesignAsset) => void;
+  onEditAsset?: (asset: DesignAsset) => void;
+  onMoveAsset?: (asset: DesignAsset) => void;
+  onToggleAsset?: (asset: DesignAsset) => void;
+  onDeleteAsset?: (asset: DesignAsset) => void;
+  onSelectAsset?: (asset: DesignAsset) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
+      {assets.map((asset) => (
+        <DesignCard
+          key={asset.id}
+          asset={asset}
+          selected={selectedAssetId === asset.id}
+          onPreview={() => onPreview(asset)}
+          onSelect={onSelectAsset ? () => onSelectAsset(asset) : undefined}
+          onEdit={onEditAsset ? () => onEditAsset(asset) : undefined}
+          onMove={onMoveAsset ? () => onMoveAsset(asset) : undefined}
+          onToggle={onToggleAsset ? () => onToggleAsset(asset) : undefined}
+          onDelete={onDeleteAsset ? () => onDeleteAsset(asset) : undefined}
+        />
+      ))}
+    </div>
+  );
+}
+
+function DesignCard({
+  asset,
+  selected,
+  onPreview,
+  onSelect,
+  onEdit,
+  onMove,
+  onToggle,
+  onDelete,
+}: {
+  asset: DesignAsset;
+  selected: boolean;
+  onPreview: () => void;
+  onSelect?: () => void;
+  onEdit?: () => void;
+  onMove?: () => void;
+  onToggle?: () => void;
+  onDelete?: () => void;
+}) {
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    if (onSelect) onSelect();
+    else onPreview();
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={clsx("group rounded-lg border bg-white p-2 text-left shadow-sm transition hover:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500", selected ? "border-blue-700 ring-2 ring-blue-100" : "border-border", !asset.is_active && "opacity-65")}
+      aria-pressed={onSelect ? selected : undefined}
+      onClick={() => onSelect?.()}
+      onDoubleClick={onPreview}
+      onKeyDown={onKeyDown}
+    >
+      <div className="relative">
+        <DesignThumbnail asset={asset} />
+        <div className="absolute right-1 top-1">
+          <EntryMenu label={`More actions for ${asset.name}`}>
+            <MenuButton onClick={onPreview}>Preview</MenuButton>
+            {asset.file.download_url ? <MenuLink href={asset.file.download_url}>Download</MenuLink> : null}
+            {onEdit ? <MenuButton onClick={onEdit}>Edit</MenuButton> : null}
+            {onMove ? <MenuButton onClick={onMove}>Move</MenuButton> : null}
+            {onToggle ? <MenuButton onClick={onToggle}>{asset.is_active ? "Deactivate" : "Activate"}</MenuButton> : null}
+            {onDelete ? <MenuButton danger onClick={onDelete}>Delete</MenuButton> : null}
+          </EntryMenu>
+        </div>
+        {selected ? <span className="absolute left-1 top-1 rounded-full bg-blue-700 p-1 text-white" aria-label="Selected design"><HiOutlineCheck className="h-4 w-4" /></span> : null}
+      </div>
+      <p className="mt-2 truncate text-sm font-bold" title={asset.name}>{asset.name}</p>
+      <p className="truncate text-xs text-muted">{asset.file.mime_type} / {formatFileSize(asset.file.size)}</p>
+      <div className="mt-2 flex items-center gap-1">
+        <Badge tone={asset.is_active ? "success" : "warning"}>{asset.is_active ? "Active" : "Inactive"}</Badge>
+        {selected ? <Badge tone="primary">Selected</Badge> : null}
+      </div>
+    </div>
+  );
+}
+
+export function DesignLibraryLoadingState({ variant = "page" }: { variant?: "page" | "picker" }) {
+  return (
+    <div className="grid gap-8">
+      <LibrarySection title="Folders" count={variant === "picker" ? 2 : 4}>
+        <div className={clsx("grid gap-3", variant === "page" ? "grid-cols-[repeat(auto-fill,minmax(240px,300px))]" : "grid-cols-[repeat(auto-fill,minmax(210px,1fr))]")}>
+          {Array.from({ length: variant === "picker" ? 2 : 4 }).map((_, index) => (
+            <div key={index} className="flex min-h-[88px] animate-pulse items-center gap-3 rounded-xl border border-amber-100 bg-amber-50 p-4">
+              <span className="h-12 w-12 rounded-xl bg-amber-100" />
+              <span className="grid flex-1 gap-2">
+                <span className="h-4 rounded bg-amber-100" />
+                <span className="h-3 w-2/3 rounded bg-amber-100" />
+              </span>
+            </div>
+          ))}
+        </div>
+      </LibrarySection>
+      <LibrarySection title="Designs" count={variant === "picker" ? 6 : 8}>
+        <SkeletonRows rows={variant === "picker" ? 3 : 4} />
+      </LibrarySection>
+    </div>
+  );
+}
+
+function EntryMenu({ children, label = "Open actions" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <span className="relative inline-block" onClick={(event) => event.stopPropagation()}>
-      <button type="button" className="rounded-full bg-white/90 p-1.5 text-slate-600 shadow-sm hover:bg-slate-100" aria-label="Open actions" onClick={() => setOpen((value) => !value)}>
+      <button type="button" className="rounded-full bg-white/90 p-1.5 text-slate-600 shadow-sm hover:bg-slate-100" aria-label={label} onClick={() => setOpen((value) => !value)}>
         <HiOutlineEllipsisVertical className="h-4 w-4" />
       </button>
       {open ? <span className="absolute right-0 z-10 mt-1 grid min-w-32 gap-1 rounded-lg border border-border bg-white p-1 shadow-soft">{children}</span> : null}
@@ -361,18 +603,20 @@ export function DesignLibraryPicker({
   const data = query.data;
   return (
     <Modal title="Choose Design" description={orderLabel} onClose={onClose} width="max-w-6xl">
-      <div className="grid gap-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="grid max-h-[82vh] gap-4 overflow-y-auto pr-1">
+        <div className="sticky top-0 z-10 -mx-1 grid gap-3 bg-surface px-1 pb-2 md:grid-cols-[minmax(240px,1fr)_auto] md:items-center">
           <SearchInput value={search} placeholder="Search designs and folders..." onChange={(event) => setSearch(event.target.value)} />
           {data ? <DesignLibraryBreadcrumbs breadcrumbs={data.breadcrumbs} onOpen={(id) => setFolderId(id || null)} /> : null}
         </div>
-        {query.isLoading ? <Spinner label="Loading designs" /> : null}
+        {query.isLoading ? <DesignLibraryLoadingState variant="picker" /> : null}
         {query.isError ? <ErrorState title="Designs unavailable" message={apiMessage(query.error, "Unable to load Design Library")} /> : null}
         {data ? (
           <DesignLibraryGrid
             folders={data.folders}
             assets={data.assets}
             selectedAssetId={selected?.id}
+            variant="picker"
+            search={search}
             onOpenFolder={(folder) => setFolderId(folder.id)}
             onPreview={setPreview}
             onSelectAsset={setSelected}

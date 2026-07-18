@@ -409,7 +409,8 @@ export function OrdersTable({
               onSelectedChange={(checked) =>
                 setSelectedOrderIds((current) => {
                   const next = new Set(current);
-                  checked ? next.add(order.id) : next.delete(order.id);
+                  if (checked) next.add(order.id);
+                  else next.delete(order.id);
                   return next;
                 })
               }

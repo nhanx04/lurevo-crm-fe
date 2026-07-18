@@ -5,12 +5,13 @@ import { HiOutlineArrowPath, HiOutlineFolderPlus, HiOutlinePhoto } from "react-i
 import { queryKeys } from "@/api/queryKeys";
 import { designLibraryApi } from "@/api/services";
 import { Button, FilterSelect, ResourceToolbar, SearchInput } from "@/components/ui";
-import { ErrorState, Spinner } from "@/components/feedback";
+import { ErrorState } from "@/components/feedback";
 import type { DesignAsset, DesignFolder, DesignLibraryParams } from "@/types/api";
 import {
   AssetDialog,
   DesignLibraryBreadcrumbs,
   DesignLibraryGrid,
+  DesignLibraryLoadingState,
   DesignPreviewDialog,
   FolderDialog,
   useDesignLibraryMutations,
@@ -71,12 +72,13 @@ export function DesignLibraryPage() {
         }
       />
       {data ? <DesignLibraryBreadcrumbs breadcrumbs={data.breadcrumbs} onOpen={openFolder} /> : null}
-      {query.isLoading ? <Spinner label="Loading Design Library" /> : null}
+      {query.isLoading ? <DesignLibraryLoadingState /> : null}
       {query.isError ? <ErrorState title="Design Library unavailable" message="Unable to load designs." onRetry={() => void query.refetch()} /> : null}
       {data ? (
         <DesignLibraryGrid
           folders={data.folders}
           assets={data.assets}
+          search={search}
           onOpenFolder={(folder) => openFolder(folder.id)}
           onPreview={setPreview}
           onEditAsset={setAssetDialog}
@@ -97,6 +99,8 @@ export function DesignLibraryPage() {
           onDeleteFolder={(folder) => {
             if (window.confirm("Only empty folders can be deleted.")) mutations.deleteFolder.mutate(folder.id);
           }}
+          onCreateFolder={() => setFolderDialog("new")}
+          onUploadAsset={() => setAssetDialog("new")}
         />
       ) : null}
       {folderDialog ? (
