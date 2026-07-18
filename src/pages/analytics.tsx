@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -48,18 +48,22 @@ export function AnalyticsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const preset = searchParams.get("preset") || "30";
-  const range = dateRangeForPreset(preset, searchParams);
-  const params: AnalyticsParams = {
-    date_from: range.from.toISOString(),
-    date_to: range.to.toISOString(),
-    timezone,
-    compare: (searchParams.get("compare") as "previous_period" | "none") || "previous_period",
-    shop_id: searchParams.get("shop_id") || undefined,
-    status_id: searchParams.get("status_id") || undefined,
-    supplier_status: searchParams.get("supplier_status") || undefined,
-    listing_id: searchParams.get("listing_id") || undefined,
-    created_by: searchParams.get("created_by") || undefined,
-  };
+  const searchKey = searchParams.toString();
+  const range = useMemo(() => dateRangeForPreset(preset, new URLSearchParams(searchKey)), [preset, searchKey]);
+  const params: AnalyticsParams = useMemo(() => {
+    const currentParams = new URLSearchParams(searchKey);
+    return {
+      date_from: range.from.toISOString(),
+      date_to: range.to.toISOString(),
+      timezone,
+      compare: (currentParams.get("compare") as "previous_period" | "none") || "previous_period",
+      shop_id: currentParams.get("shop_id") || undefined,
+      status_id: currentParams.get("status_id") || undefined,
+      supplier_status: currentParams.get("supplier_status") || undefined,
+      listing_id: currentParams.get("listing_id") || undefined,
+      created_by: currentParams.get("created_by") || undefined,
+    };
+  }, [range.from, range.to, searchKey, timezone]);
   const analytics = useQuery({
     queryKey: queryKeys.analytics.overview(params),
     queryFn: () => analyticsApi.overview(params),
