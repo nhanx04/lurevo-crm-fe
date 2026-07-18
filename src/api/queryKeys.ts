@@ -35,6 +35,9 @@ export const queryKeys = {
     asset: (id: string) => ['design-library', 'asset', id] as const,
     picker: (params?: object) => ['design-library', 'picker', params] as const,
   },
+  analytics: {
+    overview: (params?: object) => ['analytics', 'overview', params] as const,
+  },
   listingSelector: {
     list: (params?: object) => ['listings', 'selector', params] as const,
   },

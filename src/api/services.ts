@@ -1,6 +1,8 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './client';
 import { appConfig } from '@/config/app';
 import type {
+  AnalyticsOverview,
+  AnalyticsParams,
   AuthUser,
   Category,
   CategoryRequest,
@@ -165,6 +167,10 @@ export const designLibraryApi = {
   deactivateAsset: (id: string) => apiPost<DesignAsset>(`/design-library/assets/${id}/deactivate`, {}),
   removeAsset: (id: string) => apiDelete(`/design-library/assets/${id}`),
   downloadAssetUrl: (id: string) => `${appConfig.apiBaseUrl}/design-library/assets/${id}/download`,
+};
+
+export const analyticsApi = {
+  overview: (params: AnalyticsParams) => apiGet<AnalyticsOverview>('/analytics/overview', { params }),
 };
 
 export const imageApi = {

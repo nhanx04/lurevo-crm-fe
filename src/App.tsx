@@ -6,6 +6,7 @@ import {
   ChangePasswordPage,
   CollaboratorsPage,
 } from "./pages/account";
+import { AnalyticsPage } from "./pages/analytics";
 import { CategoriesPage, StatusesPage } from "./pages/catalog";
 import { DashboardPage } from "./pages/dashboard";
 import { DesignLibraryPage } from "./pages/design-library";
@@ -18,7 +19,6 @@ import {
 } from "./pages/listings";
 import { OrderCreatePage, OrderDetailPage, OrdersPage } from "./pages/orders";
 import {
-  ComingSoonPage,
   NotFoundPage,
   OwnerRoute,
   ProtectedRoute,
@@ -36,7 +36,7 @@ export function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route
             path="analytics"
-            element={<ComingSoonPage title="Analytics" description="" />}
+            element={<AnalyticsPage />}
           />
           <Route path="listings" element={<ListingsPage />} />
           <Route path="listings/new" element={<ListingCreatePage />} />

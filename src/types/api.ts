@@ -429,6 +429,204 @@ export type FileMetadataRequest = {
   checksum?: string | null;
 };
 
+export type AnalyticsMetric = {
+  value: string;
+  previous_value: string;
+  absolute_change: string;
+  change_percent?: string | null;
+  trend_direction: 'up' | 'down' | 'flat' | string;
+  polarity: 'positive' | 'negative' | 'neutral' | string;
+  unavailable?: boolean;
+  note?: string;
+};
+
+export type AnalyticsTimeSeriesPoint = {
+  bucket: string;
+  label: string;
+  orders_created: number;
+  sent_to_supplier: number;
+  supplier_submitted: number;
+  cancelled_orders: number;
+  supplier_errors: number;
+  supplier_total_cost: string;
+};
+
+export type WorkflowDistributionPoint = {
+  status_id: string;
+  name: string;
+  code: string;
+  color?: string | null;
+  count: number;
+  percent: string;
+  sort_order: number;
+};
+
+export type ReadinessBlockerPoint = {
+  code: string;
+  label: string;
+  count: number;
+  overlap?: boolean;
+};
+
+export type WorkflowFunnelStage = {
+  code: string;
+  label: string;
+  count: number;
+  conversion_percent: string;
+  overall_percent: string;
+  definition: string;
+};
+
+export type WorkflowAgingRow = {
+  status_id: string;
+  name: string;
+  code: string;
+  color?: string | null;
+  less_than_one_day: number;
+  one_to_two_days: number;
+  three_to_five_days: number;
+  six_to_seven_days: number;
+  more_than_seven_days: number;
+  age_source: string;
+};
+
+export type ProcessingDurationMetric = {
+  code: string;
+  label: string;
+  average_seconds: number;
+  median_seconds: number;
+  p90_seconds: number;
+  sample_size: number;
+  source: string;
+};
+
+export type ShopPerformanceRow = {
+  shop_id: string;
+  shop_name: string;
+  orders: number;
+  items: number;
+  quantity: number;
+  ready_to_send: number;
+  supplier_submitted: number;
+  supplier_errors: number;
+  cancelled_orders: number;
+  supplier_cost: string;
+  average_cost_per_order: string;
+};
+
+export type ProductPerformanceRow = {
+  listing_id: string;
+  listing_title: string;
+  internal_sku?: string | null;
+  supplier_sku: string;
+  orders: number;
+  items: number;
+  quantity: number;
+  supplier_cost: string;
+  average_cost_per_item: string;
+  supplier_errors: number;
+  cancelled_orders: number;
+  custom_design_percent: string;
+  library_design_percent: string;
+};
+
+export type AnalyticsOverview = {
+  period: {
+    date_from: string;
+    date_to: string;
+    timezone: string;
+    comparison_date_from?: string;
+    comparison_date_to?: string;
+    granularity: string;
+  };
+  kpis: Record<string, AnalyticsMetric>;
+  order_trend: AnalyticsTimeSeriesPoint[];
+  workflow_distribution: WorkflowDistributionPoint[];
+  readiness_blockers: ReadinessBlockerPoint[];
+  workflow_funnel: WorkflowFunnelStage[];
+  workflow_aging: WorkflowAgingRow[];
+  processing_times: ProcessingDurationMetric[];
+  shop_performance: ShopPerformanceRow[];
+  product_performance: ProductPerformanceRow[];
+  supplier_performance: {
+    submission_attempts: number;
+    successful_submissions: number;
+    failed_submissions: number;
+    success_rate: string;
+    retry_count: number;
+    cancel_requests: number;
+    successful_cancellations: number;
+    failed_cancellations: number;
+    error_breakdown: ReadinessBlockerPoint[];
+  };
+  supplier_cost: {
+    total_cost: string;
+    items_fee: string;
+    extra_services_fee: string;
+    shipping_fee: string;
+    label_fee: string;
+    average_cost_per_order: string;
+    average_cost_per_item: string;
+    malformed_fee_count: number;
+    label: string;
+  };
+  design_usage: {
+    uploaded_custom_orders: number;
+    library_design_orders: number;
+    mixed_design_orders: number;
+    missing_design_orders: number;
+    items_with_main_design: number;
+    items_with_sub_design: number;
+    items_with_mockup_1: number;
+    items_with_mockup_2: number;
+    items_missing_main_design: number;
+    average_design_files_per_item: string;
+  };
+  cancellations: {
+    cancelled_orders: number;
+    cancellation_rate: string;
+    supplier_cancellation_success_rate: string;
+    refunded_items_fee: string;
+    refunded_shipping: string;
+    refunded_total: string;
+  };
+  employee_activity: {
+    user_id: string;
+    full_name: string;
+    orders_created: number;
+    files_uploaded: number;
+    ready_to_send: number;
+    supplier_submitted: number;
+  }[];
+  attention_orders: {
+    order_id: string;
+    etsy_order_id: string;
+    shop_name: string;
+    status_name: string;
+    status_code: string;
+    customer_name?: string | null;
+    age_hours: number;
+    missing_main_design: boolean;
+    missing_shipping_label: boolean;
+    supplier_error: boolean;
+    updated_at: string;
+  }[];
+  revenue_note: string;
+};
+
+export type AnalyticsParams = {
+  date_from?: string;
+  date_to?: string;
+  timezone?: string;
+  compare?: 'previous_period' | 'none';
+  shop_id?: string;
+  status_id?: string;
+  status_code?: string;
+  supplier_status?: string;
+  listing_id?: string;
+  created_by?: string;
+};
+
 export type SupplierSubmission = {
   id: string;
   order_id: string;
