@@ -20,6 +20,7 @@ import {
   HiOutlineDocument,
   HiOutlineEye,
   HiOutlineExclamationTriangle,
+  HiOutlineFolderOpen,
   HiOutlineLink,
   HiOutlineMagnifyingGlass,
   HiOutlinePaperAirplane,
@@ -68,6 +69,7 @@ import {
   useToast,
 } from "@/components/feedback";
 import { Modal } from "@/components/layout";
+import { DesignLibraryPicker, TransparencyBackground } from "@/features/design-library/components";
 import { formatDateTime, formatFileSize } from "@/utils/format";
 import {
   activeShippingLabel,
@@ -2674,7 +2676,9 @@ function ProductionFileSlot({
   } | null>(null);
   const [urlOpen, setUrlOpen] = useState(false);
   const [listingOpen, setListingOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const canChooseListingImage = fileType === "mockup" && Boolean(listingId);
+  const canChooseLibraryDesign = fileType === "design" && usage !== null;
   const selected = item.files?.find((file) =>
     usage === null
       ? file.file_type === fileType
@@ -2719,6 +2723,26 @@ function ProductionFileSlot({
         type: "error",
         title: `${label} failed`,
         message: apiMessage(error, "Unable to save file from URL"),
+      }),
+  });
+  const addFromLibrary = useMutation({
+    mutationFn: (assetId: string) =>
+      orderApi.addLibraryDesign(orderId, item.id, {
+        file_type: "design",
+        usage: usage as "main_design" | "sub_design" | "additional_design",
+        position: position || undefined,
+        design_asset_id: assetId,
+      }),
+    onSuccess: async () => {
+      toast.push({ type: "success", title: `${label} selected` });
+      setLibraryOpen(false);
+      await onChanged();
+    },
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: `${label} failed`,
+        message: apiMessage(error, "Unable to select library design"),
       }),
   });
   const remove = useMutation({
@@ -2789,16 +2813,24 @@ function ProductionFileSlot({
         )}
         aria-label={`${selected ? "Replace" : "Upload"} ${label}`}
         disabled={add.isPending || addFromUrl.isPending}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (canChooseLibraryDesign && !selected) {
+            setLibraryOpen(true);
+            return;
+          }
+          inputRef.current?.click();
+        }}
       >
-        {add.isPending || addFromUrl.isPending ? (
+        {add.isPending || addFromUrl.isPending || addFromLibrary.isPending ? (
           <Spinner label="Saving" />
         ) : selected?.url && selected.mime_type.startsWith("image/") ? (
-          <img
-            src={selected.url}
-            alt={selected.original_name}
-            className="h-full w-full object-contain"
-          />
+          <TransparencyBackground background="checkerboard" className="h-full w-full border-0">
+            <img
+              src={selected.url}
+              alt={selected.original_name}
+              className="h-full w-full object-contain"
+            />
+          </TransparencyBackground>
         ) : localPreview?.mime.startsWith("image/") ? (
           <img
             src={localPreview.url}
@@ -2808,7 +2840,10 @@ function ProductionFileSlot({
         ) : selected ? (
           <FileGlyph file={selected} />
         ) : (
-          <HiOutlineCloudArrowUp className="h-6 w-6" />
+          <span className="grid justify-items-center gap-1">
+            <HiOutlineCloudArrowUp className="h-6 w-6" />
+            {canChooseLibraryDesign ? <span className="text-[10px] font-semibold">Upload</span> : null}
+          </span>
         )}
         {selected ? (
           <span className="absolute inset-x-0 bottom-0 hidden bg-slate-950/65 px-1 py-1 text-[10px] font-semibold text-white group-hover:block">
@@ -2823,8 +2858,9 @@ function ProductionFileSlot({
               className="truncate text-[11px] text-muted"
               title={selected.original_name}
             >
-              {selected.original_name}
+              {selected.asset_name_snapshot || selected.original_name}
             </p>
+            {selected.source_type === "design_library" ? <p className="text-[10px] font-semibold text-blue-700">Design Library</p> : null}
             <div className="mt-1 flex items-center gap-1">
               <button
                 type="button"
@@ -2879,11 +2915,37 @@ function ProductionFileSlot({
             className="rounded p-1 text-muted hover:bg-slate-100 disabled:opacity-40"
             aria-label={`Add ${label} from URL`}
             title="Add from URL"
-            disabled={add.isPending || addFromUrl.isPending}
+            disabled={add.isPending || addFromUrl.isPending || addFromLibrary.isPending}
             onClick={() => setUrlOpen(true)}
           >
             <HiOutlineLink className="h-3.5 w-3.5" />
           </button>
+          {canChooseLibraryDesign ? (
+            <>
+              <button
+                type="button"
+                className="rounded p-1 text-muted hover:bg-slate-100 disabled:opacity-40"
+                aria-label={`${selected ? "Replace" : "Choose"} ${label} from Design Library`}
+                title="Choose from Design Library"
+                disabled={add.isPending || addFromUrl.isPending || addFromLibrary.isPending}
+                onClick={() => setLibraryOpen(true)}
+              >
+                <HiOutlineFolderOpen className="h-3.5 w-3.5" />
+              </button>
+              {!selected ? (
+                <button
+                  type="button"
+                  className="rounded p-1 text-muted hover:bg-slate-100 disabled:opacity-40"
+                  aria-label={`Upload ${label}`}
+                  title="Upload"
+                  disabled={add.isPending || addFromUrl.isPending || addFromLibrary.isPending}
+                  onClick={() => inputRef.current?.click()}
+                >
+                  <HiOutlineCloudArrowUp className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </>
+          ) : null}
           {canChooseListingImage ? (
             <button
               type="button"
@@ -2919,6 +2981,13 @@ function ProductionFileSlot({
           loading={addFromUrl.isPending}
           onClose={() => setListingOpen(false)}
           onSelect={(url) => addFromUrl.mutate(url)}
+        />
+      ) : null}
+      {libraryOpen ? (
+        <DesignLibraryPicker
+          orderLabel={`${label} / Item ${item.item_number}`}
+          onClose={() => setLibraryOpen(false)}
+          onSelect={(asset) => addFromLibrary.mutate(asset.id)}
         />
       ) : null}
     </div>

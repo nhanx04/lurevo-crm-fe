@@ -1,8 +1,15 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './client';
+import { appConfig } from '@/config/app';
 import type {
   AuthUser,
   Category,
   CategoryRequest,
+  DesignAsset,
+  DesignAssetRequest,
+  DesignFolder,
+  DesignFolderRequest,
+  DesignLibraryBrowse,
+  DesignLibraryParams,
   ListParams,
   ListResponse,
   Listing,
@@ -95,6 +102,8 @@ export const orderApi = {
   itemFiles: (itemId: string) => apiGet<OrderItemFile[]>(`/order-items/${itemId}/files`),
   addItemFile: (orderId: string, itemId: string, body: { file: FileMetadataRequest; file_type: string; usage?: string | null; position?: string | null }) =>
     apiPost<OrderItemFile>(`/orders/${orderId}/items/${itemId}/files`, body),
+  addLibraryDesign: (orderId: string, itemId: string, body: { design_asset_id: string; file_type: 'design'; usage: 'main_design' | 'sub_design' | 'additional_design'; position?: string | null }) =>
+    apiPost<OrderItemFile>(`/orders/${orderId}/items/${itemId}/files`, { ...body, source_type: 'design_library' }),
   addItemFileFromUrl: (orderId: string, itemId: string, body: { url: string; file_type: string; usage?: string | null; position?: string | null }) =>
     apiPost<OrderItemFile>(`/orders/${orderId}/items/${itemId}/files`, body),
   uploadItemFile: (orderId: string, itemId: string, body: { file: File; file_type: string; usage?: string | null; position?: string | null }) => {
@@ -128,6 +137,34 @@ export const orderApi = {
   cancel: (orderId: string, body?: { reason?: string }) => apiPost<Order>(`/orders/${orderId}/cancel`, body || {}),
   putOnHold: (orderId: string, body?: { note?: string }) => apiPost<Order>(`/orders/${orderId}/put-on-hold`, body || {}),
   resume: (orderId: string) => apiPost<Order>(`/orders/${orderId}/resume`, {}),
+};
+
+export const designLibraryApi = {
+  browse: (params: DesignLibraryParams) => apiGet<DesignLibraryBrowse>('/design-library', { params }),
+  createFolder: (body: DesignFolderRequest) => apiPost<DesignFolder>('/design-library/folders', body),
+  updateFolder: (id: string, body: DesignFolderRequest) => apiPatch<DesignFolder>(`/design-library/folders/${id}`, body),
+  moveFolder: (id: string, parentId?: string | null) => apiPost<DesignFolder>(`/design-library/folders/${id}/move`, { parent_id: parentId || null }),
+  activateFolder: (id: string) => apiPost<DesignFolder>(`/design-library/folders/${id}/activate`, {}),
+  deactivateFolder: (id: string) => apiPost<DesignFolder>(`/design-library/folders/${id}/deactivate`, {}),
+  removeFolder: (id: string) => apiDelete(`/design-library/folders/${id}`),
+  detailAsset: (id: string) => apiGet<DesignAsset>(`/design-library/assets/${id}`),
+  createAsset: (body: DesignAssetRequest) => apiPost<DesignAsset>('/design-library/assets', body),
+  uploadAsset: (body: { file: File; name: string; folder_id?: string | null; description?: string | null; tags?: string[]; is_active?: boolean }) => {
+    const form = new FormData();
+    form.append('file', body.file);
+    form.append('name', body.name);
+    if (body.folder_id) form.append('folder_id', body.folder_id);
+    if (body.description) form.append('description', body.description);
+    if (body.tags?.length) form.append('tags', body.tags.join(','));
+    if (body.is_active !== undefined) form.append('is_active', String(body.is_active));
+    return apiPost<DesignAsset>('/design-library/assets', form, { headers: { 'Content-Type': undefined } });
+  },
+  updateAsset: (id: string, body: DesignAssetRequest) => apiPatch<DesignAsset>(`/design-library/assets/${id}`, body),
+  moveAsset: (id: string, folderId?: string | null) => apiPost<DesignAsset>(`/design-library/assets/${id}/move`, { folder_id: folderId || null }),
+  activateAsset: (id: string) => apiPost<DesignAsset>(`/design-library/assets/${id}/activate`, {}),
+  deactivateAsset: (id: string) => apiPost<DesignAsset>(`/design-library/assets/${id}/deactivate`, {}),
+  removeAsset: (id: string) => apiDelete(`/design-library/assets/${id}`),
+  downloadAssetUrl: (id: string) => `${appConfig.apiBaseUrl}/design-library/assets/${id}/download`,
 };
 
 export const imageApi = {

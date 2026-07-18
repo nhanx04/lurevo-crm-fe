@@ -207,6 +207,9 @@ export type OrderReadiness = {
 export type OrderItemFile = {
   id: string;
   file_id: string;
+  design_asset_id?: string | null;
+  source_type?: 'uploaded' | 'design_library';
+  asset_name_snapshot?: string | null;
   storage_key?: string;
   url?: string;
   file_type: string;
@@ -218,6 +221,79 @@ export type OrderItemFile = {
   mime_type: string;
   size: number;
   created_at: string;
+};
+
+export type DesignFolderBreadcrumb = {
+  id?: string | null;
+  name: string;
+};
+
+export type DesignFolder = {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+  is_active: boolean;
+  child_folder_count: number;
+  design_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DesignAsset = {
+  id: string;
+  name: string;
+  description?: string | null;
+  folder_id?: string | null;
+  folder_path?: DesignFolderBreadcrumb[];
+  is_active: boolean;
+  tags: string[];
+  file: {
+    id: string;
+    original_name: string;
+    mime_type: string;
+    size: number;
+    preview_url?: string;
+    download_url?: string;
+  };
+  created_by: { id: string; full_name: string };
+  updated_by?: { id: string; full_name: string } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DesignLibraryBrowse = {
+  current_folder?: DesignFolder | null;
+  breadcrumbs: DesignFolderBreadcrumb[];
+  folders: DesignFolder[];
+  assets: DesignAsset[];
+  meta: Pagination;
+};
+
+export type DesignLibraryParams = {
+  folder_id?: string;
+  search?: string;
+  status?: 'active' | 'inactive' | 'all';
+  type?: 'folder' | 'design' | 'all';
+  scope?: 'current' | 'recursive' | 'all';
+  sort?: 'name' | 'created_at' | 'updated_at';
+  direction?: SortOrder;
+  page?: number;
+  page_size?: number;
+};
+
+export type DesignFolderRequest = {
+  name?: string;
+  parent_id?: string | null;
+};
+
+export type DesignAssetRequest = {
+  file_id?: string;
+  file?: FileMetadataRequest;
+  folder_id?: string | null;
+  name?: string;
+  description?: string | null;
+  tags?: string[];
+  is_active?: boolean;
 };
 
 export type OrderItem = {

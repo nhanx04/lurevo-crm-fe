@@ -30,6 +30,11 @@ export const queryKeys = {
   orderItems: {
     files: (itemId: string) => ['order-items', itemId, 'files'] as const,
   },
+  designLibrary: {
+    browse: (params?: object) => ['design-library', 'browse', params] as const,
+    asset: (id: string) => ['design-library', 'asset', id] as const,
+    picker: (params?: object) => ['design-library', 'picker', params] as const,
+  },
   listingSelector: {
     list: (params?: object) => ['listings', 'selector', params] as const,
   },

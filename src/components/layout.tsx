@@ -8,6 +8,7 @@ import {
   HiOutlineChevronDown,
   HiOutlineCog6Tooth,
   HiOutlineFolder,
+  HiOutlinePhoto,
   HiOutlineRectangleStack,
   HiOutlineShoppingBag,
   HiOutlineSquares2X2,
@@ -31,6 +32,7 @@ const routeMeta = [
   { match: /^\/app\/orders\/[^/]+\/edit$/, title: "Order Details" },
   { match: /^\/app\/orders\/[^/]+$/, title: "Order Details" },
   { match: /^\/app\/orders$/, title: "Orders" },
+  { match: /^\/app\/design-library$/, title: "Design Library" },
   { match: /^\/app\/listings\/new$/, title: "Create Listing" },
   { match: /^\/app\/listings\/[^/]+\/edit$/, title: "Edit Listing" },
   { match: /^\/app\/listings\/[^/]+$/, title: "Listing Details" },
@@ -65,6 +67,7 @@ const navigationGroups = [
     items: [
       { to: "/app/listings", label: "Listings", icon: HiOutlineRectangleStack },
       { to: "/app/orders", label: "Orders", icon: HiOutlineShoppingBag },
+      { to: "/app/design-library", label: "Design Library", icon: HiOutlinePhoto },
     ],
   },
   {

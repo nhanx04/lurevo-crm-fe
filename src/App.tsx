@@ -8,6 +8,7 @@ import {
 } from "./pages/account";
 import { CategoriesPage, StatusesPage } from "./pages/catalog";
 import { DashboardPage } from "./pages/dashboard";
+import { DesignLibraryPage } from "./pages/design-library";
 import { ShopsPage } from "./pages/shops";
 import {
   ListingCreatePage,
@@ -45,6 +46,7 @@ export function App() {
           <Route path="listing-statuses" element={<StatusesPage />} />
           <Route path="shops" element={<ShopsPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="design-library" element={<DesignLibraryPage />} />
           <Route path="orders/new" element={<OrderCreatePage />} />
           <Route path="orders/:id" element={<OrderDetailPage />} />
           <Route path="orders/:id/edit" element={<OrderDetailPage />} />
