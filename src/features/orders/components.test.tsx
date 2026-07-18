@@ -13,7 +13,13 @@ const order: Order = {
   status: { id: "status-1", name: "Draft", code: "draft" },
   customer_name: "John Doe",
   created_by: { id: "user-1", full_name: "Anna" },
-  supplier: { status: null },
+  supplier: {
+    status: "Fulfilled",
+    tracking_number: "94001118992238475600000001",
+    carrier: "USPS",
+    total_fee: "18.50",
+    last_synced_at: "2026-07-19T07:35:00Z",
+  },
   version: 1,
   products_count: 2,
   items_count: 3,
@@ -53,6 +59,8 @@ const order: Order = {
           item_number: 1,
           quantity: 1,
           supplier_sku: "SUP-DCS",
+          supplier_item_id: "101",
+          supplier_item_fee: "8.00",
           option: "Decanter",
           color: "Clear",
           print_method: "UV Print",
@@ -91,6 +99,8 @@ const order: Order = {
           item_number: 2,
           quantity: 2,
           supplier_sku: "SUP-DCS",
+          supplier_item_id: "102",
+          supplier_item_fee: "6.50",
           option: "Decanter",
           color: "Blue",
           print_method: "UV Print",
@@ -158,11 +168,40 @@ describe("order components", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getAllByText("Draft")).toHaveLength(1);
+    expect(screen.getByText("Supplier Data")).toBeInTheDocument();
+    expect(screen.getByText("Item Fee")).toBeInTheDocument();
+    expect(screen.getByText("Fulfilled")).toBeInTheDocument();
+    expect(screen.getByText("$18.50")).toBeInTheDocument();
+    expect(screen.getByText("USPS")).toBeInTheDocument();
+    expect(screen.getByText("$8.00")).toBeInTheDocument();
+    expect(screen.getByText("$6.50")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /Send to Supplier/i })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: /Delete/i })).toHaveLength(1);
     expect(screen.getByLabelText("Preview design for item 1")).toBeInTheDocument();
     expect(screen.getByLabelText("Preview design for item 2")).toBeInTheDocument();
     expect(screen.getByLabelText("Preview mockup for item 1")).toBeInTheDocument();
+  });
+
+  it("supports selecting visible orders for supplier sync", () => {
+    renderWithProviders(
+      <OrdersTable
+        orders={[order]}
+        loading={false}
+        error={false}
+        onRetry={vi.fn()}
+        page={1}
+        totalPages={1}
+        totalItems={1}
+        onPage={vi.fn()}
+      />,
+    );
+    const syncButton = screen.getByRole("button", { name: /Sync Supplier Data/i });
+    expect(syncButton).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Select all visible orders"));
+    expect(screen.getByText("1 orders selected")).toBeInTheDocument();
+    expect(syncButton).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Clear selection/i }));
+    expect(syncButton).toBeDisabled();
   });
 
   it("keeps readiness failures collapsed until requested", () => {

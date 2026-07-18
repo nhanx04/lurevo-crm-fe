@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HiOutlineArrowLeft,
   HiOutlineArrowDownTray,
+  HiOutlineArrowPath,
   HiOutlineChevronDown,
   HiOutlineClipboardDocument,
   HiOutlineClock,
@@ -70,7 +71,7 @@ import {
 } from "@/components/feedback";
 import { Modal } from "@/components/layout";
 import { DesignLibraryPicker, TransparencyBackground } from "@/features/design-library/components";
-import { formatDateTime, formatFileSize } from "@/utils/format";
+import { formatCurrency, formatDateTime, formatFileSize } from "@/utils/format";
 import {
   activeShippingLabel,
   allowedWorkflowActions,
@@ -290,8 +291,40 @@ export function OrdersTable({
   onPage: (page: number) => void;
 }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const [hoveredOrderId, setHoveredOrderId] = useState<string | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [syncResult, setSyncResult] = useState<SyncSupplierResultState | null>(null);
   const openOrder = (orderId: string) => navigate(`/app/orders/${orderId}`);
+  const visibleOrderIds = (orders || []).map((order) => order.id);
+  const visibleSelectedCount = visibleOrderIds.filter((id) => selectedOrderIds.has(id)).length;
+  const allVisibleSelected = visibleOrderIds.length > 0 && visibleSelectedCount === visibleOrderIds.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    setSelectedOrderIds((current) => new Set([...current].filter((id) => visibleOrderIds.includes(id))));
+  }, [visibleOrderIds.join("|")]);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected;
+  }, [someVisibleSelected]);
+  const syncSelected = useMutation({
+    mutationFn: () => orderApi.syncSupplierData([...selectedOrderIds]),
+    onSuccess: async (result) => {
+      setSyncResult(result);
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      const message = result.failed || result.skipped
+        ? `Supplier sync completed: ${result.synced} synced, ${result.skipped} skipped, ${result.failed} failed.`
+        : `${result.synced} orders synced successfully.`;
+      toast.push({ type: result.failed ? "info" : "success", title: "Supplier sync completed", message });
+    },
+    onError: (error) =>
+      toast.push({
+        type: "error",
+        title: "Supplier sync failed",
+        message: apiMessage(error, "Unable to sync supplier data"),
+      }),
+  });
   if (loading) return <SkeletonRows rows={8} />;
   if (error)
     return <ErrorState message="Could not load orders." onRetry={onRetry} />;
@@ -305,9 +338,52 @@ export function OrdersTable({
   }
   return (
     <>
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm font-semibold text-slate-700">
+          {selectedOrderIds.size ? `${selectedOrderIds.size} orders selected` : "Select orders to sync supplier data"}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!selectedOrderIds.size || syncSelected.isPending}
+            title={!selectedOrderIds.size ? "Select at least one order" : "Sync selected supplier data"}
+            onClick={() => syncSelected.mutate()}
+          >
+            {syncSelected.isPending ? <Spinner label="Syncing" /> : <HiOutlineArrowPath />}
+            {syncSelected.isPending ? "Syncing..." : "Sync Supplier Data"}
+          </Button>
+          {selectedOrderIds.size ? (
+            <Button type="button" variant="ghost" onClick={() => setSelectedOrderIds(new Set())}>
+              Clear selection
+            </Button>
+          ) : null}
+          {syncResult ? (
+            <Button type="button" variant="ghost" onClick={() => setSyncResult(syncResult)}>
+              View sync result
+            </Button>
+          ) : null}
+        </div>
+      </div>
       <Table>
         <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-muted">
           <tr>
+            <th className="w-12 px-4 py-3">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                aria-label="Select all visible orders"
+                checked={allVisibleSelected}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setSelectedOrderIds((current) => {
+                    const next = new Set(current);
+                    visibleOrderIds.forEach((id) => checked ? next.add(id) : next.delete(id));
+                    return next;
+                  });
+                }}
+              />
+            </th>
             <th className="px-4 py-3">Order</th>
             <th className="px-4 py-3">Shop / Customer</th>
             <th className="px-4 py-3">Product and Configuration</th>
@@ -315,7 +391,8 @@ export function OrdersTable({
             <th className="px-4 py-3">Mockup</th>
             <th className="px-4 py-3">Qty</th>
             <th className="px-4 py-3">Workflow Status</th>
-            <th className="px-4 py-3">Supplier Status</th>
+            <th className="px-4 py-3">Supplier Data</th>
+            <th className="px-4 py-3">Item Fee</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -328,6 +405,14 @@ export function OrdersTable({
               onHover={(active) => setHoveredOrderId(active ? order.id : null)}
               onOpen={() => openOrder(order.id)}
               onChanged={onRetry}
+              selected={selectedOrderIds.has(order.id)}
+              onSelectedChange={(checked) =>
+                setSelectedOrderIds((current) => {
+                  const next = new Set(current);
+                  checked ? next.add(order.id) : next.delete(order.id);
+                  return next;
+                })
+              }
             />
           ))}
         </tbody>
@@ -338,9 +423,12 @@ export function OrdersTable({
         totalItems={totalItems}
         onPage={onPage}
       />
+      {syncResult ? <SupplierSyncResultModal result={syncResult} onClose={() => setSyncResult(null)} /> : null}
     </>
   );
 }
+
+type SyncSupplierResultState = Awaited<ReturnType<typeof orderApi.syncSupplierData>>;
 
 const COLLAPSED_ITEM_LIMIT = 5;
 
@@ -356,12 +444,16 @@ function OrderTableGroup({
   onHover,
   onOpen,
   onChanged,
+  selected,
+  onSelectedChange,
 }: {
   order: Order;
   hovered: boolean;
   onHover: (active: boolean) => void;
   onOpen: () => void;
   onChanged: () => void;
+  selected: boolean;
+  onSelectedChange: (checked: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const allItems = orderTableItems(order);
@@ -402,6 +494,16 @@ function OrderTableGroup({
         >
           {index === 0 ? (
             <>
+              <td rowSpan={rowSpan} className="w-12 px-4 py-4 align-top">
+                <input
+                  type="checkbox"
+                  aria-label={`Select order ${order.etsy_order_id}`}
+                  checked={selected}
+                  data-row-interactive="true"
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => onSelectedChange(event.target.checked)}
+                />
+              </td>
               <OrderMetadataCell
                 order={order}
                 accent={accent.marker}
@@ -433,8 +535,11 @@ function OrderTableGroup({
               <td rowSpan={rowSpan} className="px-4 py-4 align-top">
                 <OrderStatusBadge status={order.status} />
               </td>
-              <td rowSpan={rowSpan} className="px-4 py-4 align-top">
-                <SupplierStatusBadge status={order.supplier.status} />
+              <td rowSpan={rowSpan} className="min-w-[220px] px-4 py-4 align-top">
+                <SupplierDataCell order={order} />
+              </td>
+              <td rowSpan={rowSpan} className="min-w-[180px] px-4 py-4 align-top">
+                <ItemFeeCell order={order} />
               </td>
               <td rowSpan={rowSpan} className="px-4 py-4 text-right align-top">
                 <SupplierTableAction order={order} onChanged={onChanged} />
@@ -506,6 +611,125 @@ function OrderMetadataCell({
         {orderTotalQuantity(order) || order.items_count}
       </p>
     </td>
+  );
+}
+
+function SupplierDataCell({ order }: { order: Order }) {
+  const toast = useToast();
+  const tracking = order.supplier.tracking_number?.trim();
+  const carrier = order.supplier.carrier?.trim();
+  return (
+    <div className="grid gap-2 text-xs">
+      <div>
+        <p className="text-[11px] font-semibold uppercase text-muted">Status</p>
+        <SupplierStatusBadge status={order.supplier.status} />
+      </div>
+      <div>
+        <p className="text-[11px] font-semibold uppercase text-muted">Tracking</p>
+        {tracking ? (
+          <button
+            type="button"
+            data-row-interactive="true"
+            className="flex max-w-[180px] items-center gap-1 font-semibold text-blue-700 hover:text-blue-900"
+            title={tracking}
+            onClick={(event) => {
+              event.stopPropagation();
+              void navigator.clipboard?.writeText(tracking);
+              toast.push({ type: "success", title: "Tracking copied" });
+            }}
+          >
+            <span className="truncate">{tracking}</span>
+            <HiOutlineClipboardDocument className="h-3.5 w-3.5 shrink-0" />
+          </button>
+        ) : (
+          <p className="font-semibold text-slate-500">-</p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-muted">Total fee</p>
+          <p className="font-semibold">{formatMoneyOrDash(order.supplier.total_fee)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-muted">Carrier</p>
+          <p className="font-semibold">{carrier || "-"}</p>
+        </div>
+      </div>
+      <div>
+        <p className="text-[11px] font-semibold uppercase text-muted">Synced</p>
+        <p className="font-semibold">{order.supplier.last_synced_at ? formatDateTime(order.supplier.last_synced_at) : "Never"}</p>
+      </div>
+    </div>
+  );
+}
+
+function ItemFeeCell({ order }: { order: Order }) {
+  const items = (order.lines || []).flatMap((line) => line.items.map((item) => ({ line, item })));
+  if (!items.length) return <span className="text-sm font-semibold text-slate-500">-</span>;
+  const visible = items.slice(0, 3);
+  return (
+    <div className="grid gap-2 text-xs">
+      {visible.map(({ item }, index) => (
+        <div key={item.id}>
+          {items.length > 1 ? (
+            <p className="max-w-[160px] truncate text-[11px] font-semibold text-muted" title={item.supplier_sku}>
+              Item {item.item_number} / {item.supplier_sku}
+            </p>
+          ) : null}
+          <p className="font-semibold">
+            {formatMoneyOrDash(item.supplier_item_fee)}
+            <span className="ml-1 text-muted">x {item.quantity}</span>
+          </p>
+          {index < visible.length - 1 ? <div className="mt-2 border-t border-slate-100" /> : null}
+        </div>
+      ))}
+      {items.length > visible.length ? (
+        <p className="font-semibold text-blue-700">+{items.length - visible.length} more</p>
+      ) : null}
+    </div>
+  );
+}
+
+function formatMoneyOrDash(value?: string | null) {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+  return formatCurrency(value);
+}
+
+function SupplierSyncResultModal({
+  result,
+  onClose,
+}: {
+  result: SyncSupplierResultState;
+  onClose: () => void;
+}) {
+  return (
+    <Modal title="Supplier Sync Result" onClose={onClose} width="max-w-2xl">
+      <div className="grid gap-4">
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          <SoftPanel className="p-3"><p className="text-muted">Synced</p><p className="text-lg font-bold">{result.synced}</p></SoftPanel>
+          <SoftPanel className="p-3"><p className="text-muted">Skipped</p><p className="text-lg font-bold">{result.skipped}</p></SoftPanel>
+          <SoftPanel className="p-3"><p className="text-muted">Failed</p><p className="text-lg font-bold">{result.failed}</p></SoftPanel>
+        </div>
+        <div className="max-h-[52vh] overflow-y-auto rounded border border-border">
+          {result.results.map((item) => (
+            <div key={item.order_id} className="border-b border-border p-3 last:border-b-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-semibold">#{item.customer_order_id || item.order_id}</p>
+                <Badge tone={item.status === "synced" ? "success" : item.status === "skipped" ? "warning" : "danger"}>{item.status}</Badge>
+              </div>
+              {item.message ? <p className="mt-1 text-sm text-muted">{item.message}</p> : null}
+              {item.warnings?.length ? (
+                <ul className="mt-2 list-disc pl-5 text-sm text-amber-700">
+                  {item.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                </ul>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1387,7 +1611,7 @@ function SupplierSummaryTab({ order }: { order: Order }) {
   const missing = (value?: string | number | boolean | null) =>
     value === undefined || value === null || value === "";
   const display = (value?: string | number | boolean | null) => {
-    if (missing(value)) return "—";
+    if (missing(value)) return "-";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     return String(value);
   };
@@ -1426,7 +1650,7 @@ function SupplierSummaryTab({ order }: { order: Order }) {
             disabled={refresh.isPending}
             onClick={() => refresh.mutate()}
           >
-            {refresh.isPending ? <Spinner label="Refreshing" /> : "Refresh"}
+            {refresh.isPending ? <Spinner label="Refreshing" /> : "Sync Supplier Data"}
           </Button>
         ) : null}
       </div>
@@ -1490,6 +1714,24 @@ function SupplierSummaryTab({ order }: { order: Order }) {
           </dl>
         </details>
       ) : null}
+      <details className="rounded border border-border p-3" open>
+        <summary className="cursor-pointer text-sm font-semibold">
+          Supplier Item Fees
+        </summary>
+        <div className="mt-3 grid gap-3">
+          {(order.lines || []).flatMap((line) => line.items).map((item) => (
+            <div key={item.id} className="grid gap-2 border-b border-border pb-3 text-sm last:border-b-0 last:pb-0 sm:grid-cols-2">
+              <Info label={`Item ${item.item_number}`} value={item.supplier_sku} />
+              <Info label="Supplier Item ID" value={display(item.supplier_item_id)} copyValue={item.supplier_item_id || undefined} />
+              <Info label="Supplier Item Fee" value={formatMoneyOrDash(item.supplier_item_fee)} />
+              <Info label="Quantity" value={String(item.quantity)} />
+            </div>
+          ))}
+          {!order.lines?.some((line) => line.items.length) ? (
+            <p className="text-sm text-muted">No order items.</p>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }

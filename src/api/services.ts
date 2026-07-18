@@ -33,6 +33,7 @@ import type {
   ShippingLabel,
   Shop,
   ShopRequest,
+  SyncSupplierOrdersResponse,
   TokenPairResponse,
   User,
 } from '@/types/api';
@@ -86,6 +87,7 @@ export const shopApi = {
 
 export const orderApi = {
   list: (params: OrderParams) => apiGet<ListResponse<Order>>('/orders', { params }),
+  syncSupplierData: (orderIds: string[]) => apiPost<SyncSupplierOrdersResponse>('/orders/sync-supplier-data', { order_ids: orderIds }),
   detail: (id: string) => apiGet<Order>(`/orders/${id}`),
   create: (body: OrderRequest) => apiPost<Order>('/orders', body),
   update: (id: string, body: OrderRequest) => apiPatch<Order>(`/orders/${id}`, body),

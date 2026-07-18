@@ -311,7 +311,28 @@ export type OrderItem = {
   main_position?: string | null;
   sub_position?: string | null;
   production_notice?: string | null;
+  supplier_item_id?: string | null;
+  supplier_item_fee?: string | null;
   files?: OrderItemFile[];
+};
+
+export type SyncSupplierOrderResult = {
+  order_id: string;
+  customer_order_id?: string;
+  status: 'synced' | 'skipped' | 'failed' | string;
+  supplier_status?: string | null;
+  tracking_number?: string | null;
+  total_fee?: string | null;
+  message?: string;
+  warnings?: string[];
+};
+
+export type SyncSupplierOrdersResponse = {
+  requested: number;
+  synced: number;
+  failed: number;
+  skipped: number;
+  results: SyncSupplierOrderResult[];
 };
 
 export type OrderLine = {
