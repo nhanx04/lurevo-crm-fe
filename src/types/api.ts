@@ -440,6 +440,15 @@ export type OrderActivity = {
   created_at: string;
 };
 
+export type OrderTransition = {
+  action: string;
+  target_status: string;
+  target_status_code?: string;
+  label: string;
+  requires_ready: boolean;
+  primary?: boolean;
+};
+
 export type Order = {
   id: string;
   etsy_order_id: string;
@@ -489,6 +498,7 @@ export type Order = {
   designs_count: number;
   has_active_shipping_label: boolean;
   readiness?: OrderReadiness;
+  available_transitions?: OrderTransition[];
   lines?: OrderLine[];
   shipping_labels?: ShippingLabel[];
   active_shipping_label?: ShippingLabel | null;

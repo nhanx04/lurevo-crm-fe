@@ -210,7 +210,7 @@ export function OrderDetailPage() {
         </OrderHeader>
       </div>
 
-      <section className="grid gap-4 rounded-xl border border-border bg-white p-4 shadow-sm xl:grid-cols-[minmax(0,1fr)_220px]">
+      <section className="grid gap-4 rounded-xl border border-border bg-white p-4 shadow-sm xl:grid-cols-[minmax(320px,1fr)_190px] xl:items-start">
         <CompactReadinessBar order={data} className="min-w-0" />
         <ShippingLabelPanel order={data} onChanged={() => void refresh()} compact />
         <div className="border-t border-border pt-3 xl:col-span-2">

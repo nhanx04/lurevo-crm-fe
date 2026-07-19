@@ -74,12 +74,12 @@ import { DesignLibraryPicker, TransparencyBackground } from "@/features/design-l
 import { formatCurrency, formatDateTime, formatFileSize } from "@/utils/format";
 import {
   activeShippingLabel,
-  allowedWorkflowActions,
   apiMessage,
   itemMainDesign,
   itemMockupCount,
   itemProductionComplete,
   listingSupplierReady,
+  missingReadinessMessages,
   orderStatusCodes,
   orderStatusAccent,
   orderTotalQuantity,
@@ -87,7 +87,9 @@ import {
   statusColor,
   supplierConfigSummary,
   supplierVariantCounts,
+  workflowTransitions,
   type WorkflowAction,
+  type WorkflowActionState,
 } from "./orderUtils";
 
 export function OrderStatusBadge({ status }: { status: Order["status"] }) {
@@ -1767,10 +1769,11 @@ export function WorkflowActionBar({
   onBeforeAction?: () => Promise<void>;
 }) {
   const toast = useToast();
-  const actions = allowedWorkflowActions(order, isOwner);
+  const transitions = workflowTransitions(order, isOwner);
   const [revisionOpen, setRevisionOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [confirmTransition, setConfirmTransition] = useState<WorkflowActionState | null>(null);
   const workflow = useMutation({
     mutationFn: async (action: WorkflowAction) => {
       await onBeforeAction?.();
@@ -1791,6 +1794,7 @@ export function WorkflowActionBar({
     },
     onSuccess: async () => {
       await onChanged();
+      setConfirmTransition(null);
       toast.push({ type: "success", title: "Order updated" });
     },
     onError: (error) =>
@@ -1800,44 +1804,71 @@ export function WorkflowActionBar({
         message: apiMessage(error, "Unable to update workflow"),
       }),
   });
-  const button = (action: WorkflowAction, label: string, primary = false) =>
-    actions.has(action) ? (
+  const transitionByAction = new Map(transitions.map((transition) => [transition.action, transition]));
+  const directActions: WorkflowAction[] = ["submit_for_review", "mark_ready", "retry_supplier", "resume", "cancel"];
+  const primaryDirect = directActions.filter((action) => transitionByAction.get(action)?.primary);
+  const secondaryDirect = directActions.filter((action) => !transitionByAction.get(action)?.primary);
+  const renderTransitionButton = (transition?: WorkflowActionState) => {
+    if (!transition) return null;
+    const button = (
       <Button
-        key={action}
+        key={transition.action}
         type="button"
-        variant={primary ? "primary" : "secondary"}
-        disabled={workflow.isPending}
+        variant={transition.primary ? "primary" : "secondary"}
+        disabled={workflow.isPending || transition.disabled}
+        aria-describedby={transition.disabled ? `${transition.action}-disabled-reason` : undefined}
         onClick={() =>
-          action === "cancel" ? setCancelOpen(true) : workflow.mutate(action)
+          transition.action === "cancel"
+            ? setCancelOpen(true)
+            : setConfirmTransition(transition)
         }
       >
-        {workflow.isPending ? <Spinner label="Working" /> : label}
+        {workflow.isPending ? <Spinner label="Working" /> : transition.label}
       </Button>
-    ) : null;
+    );
+    return transition.disabled ? (
+      <span key={transition.action} className="inline-flex" title={transition.disabled_reason}>
+        {button}
+      </span>
+    ) : button;
+  };
   return (
     <>
       <div className="flex flex-wrap gap-2">
-        {button("submit_for_review", "Submit for Review", true)}
-        {actions.has("request_revision") ? (
+        {secondaryDirect.map((action) => renderTransitionButton(transitionByAction.get(action)))}
+        {transitionByAction.has("request_revision") ? (
           <Button
             type="button"
             variant="secondary"
             onClick={() => setRevisionOpen(true)}
           >
-            Request Revision
+            {transitionByAction.get("request_revision")?.label || "Request Revision"}
           </Button>
         ) : null}
-        {button("mark_ready", "Mark Ready", true)}
-        {actions.has("send_to_supplier") ? (
-          <Button type="button" onClick={() => setSendOpen(true)}>
-            <HiOutlinePaperAirplane />
-            Send to Supplier
-          </Button>
+        {transitionByAction.has("send_to_supplier") ? (
+          <span className="inline-flex" title={transitionByAction.get("send_to_supplier")?.disabled_reason}>
+            <Button type="button" disabled={transitionByAction.get("send_to_supplier")?.disabled} onClick={() => setSendOpen(true)}>
+              <HiOutlinePaperAirplane />
+              {transitionByAction.get("send_to_supplier")?.label || "Send to Supplier"}
+            </Button>
+          </span>
         ) : null}
-        {button("retry_supplier", "Retry Supplier", true)}
-        {button("resume", "Resume")}
-        {button("cancel", "Cancel Order")}
+        {primaryDirect.map((action) => renderTransitionButton(transitionByAction.get(action)))}
       </div>
+      {transitions.some((transition) => transition.disabled) ? (
+        <p id={`${transitions.find((transition) => transition.disabled)?.action}-disabled-reason`} className="w-full text-xs text-amber-700">
+          {transitions.find((transition) => transition.disabled)?.disabled_reason}
+        </p>
+      ) : null}
+      {confirmTransition ? (
+        <TransitionConfirmDialog
+          order={order}
+          transition={confirmTransition}
+          loading={workflow.isPending}
+          onClose={() => setConfirmTransition(null)}
+          onConfirm={() => workflow.mutate(confirmTransition.action)}
+        />
+      ) : null}
       {revisionOpen ? (
         <RequestRevisionDialog
           order={order}
@@ -1863,6 +1894,52 @@ export function WorkflowActionBar({
         />
       ) : null}
     </>
+  );
+}
+
+function TransitionConfirmDialog({
+  order,
+  transition,
+  loading,
+  onClose,
+  onConfirm,
+}: {
+  order: Order;
+  transition: WorkflowActionState;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const missing = missingReadinessMessages(order);
+  return (
+    <Modal title={transition.label} description="Confirm this workflow status change." onClose={loading ? () => undefined : onClose} width="max-w-lg">
+      <div className="grid gap-4">
+        <div className="grid gap-2 rounded-lg border border-border bg-slate-50 p-3 text-sm">
+          <Info label="Order" value={order.etsy_order_id} />
+          <Info label="Current status" value={order.status.name} />
+          <Info label="Target status" value={transition.target_status.replace(/_/g, " ")} />
+          <Info label="Items" value={`${order.products_count} products / ${order.items_count} items`} />
+        </div>
+        {transition.requires_ready && missing.length ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            <p className="font-semibold">Readiness requirements are still missing.</p>
+            <ul className="mt-2 grid gap-1">
+              {missing.slice(0, 4).map((message) => (
+                <li key={message}>- {message}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={loading} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={loading || transition.disabled} onClick={onConfirm}>
+            {loading ? <Spinner label="Working" /> : transition.label}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -2191,6 +2268,7 @@ function CancelOrderDialog({
 
 export function CompactReadinessBar({ order, className }: { order: Order; className?: string }) {
   const progress = readinessProgress(order.readiness);
+  const checks = order.readiness?.checks || [];
   const failed = order.readiness?.checks.filter((check) => !check.passed) || [];
   const [expanded, setExpanded] = useState(false);
   function scrollToCheck(check: { order_item_id?: string; section?: string }) {
@@ -2201,68 +2279,88 @@ export function CompactReadinessBar({ order, className }: { order: Order; classN
         : null;
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
-  const missingSummary = failed
-    .slice(0, 2)
-    .map((check) => check.message.replace(/\.$/, "").toLowerCase())
-    .join(" and ");
+  const visibleChecks = expanded ? checks : checks.slice(0, 5);
   return (
-    <section className={clsx("min-w-0", className)}>
-      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <p className="font-bold">Order readiness</p>
-          <p className="text-sm font-semibold text-muted">
-            {progress.percent}%
-          </p>
-          <Badge tone={order.readiness?.ready ? "success" : "warning"}>
-            {order.readiness?.ready ? "Ready" : "Not ready"}
-          </Badge>
+    <section className={clsx("grid min-w-0 gap-4 md:grid-cols-[minmax(260px,1fr)_140px] md:items-center", className)}>
+      <div className="min-w-0">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-bold">Order readiness</h2>
+          <Badge tone={order.readiness?.ready ? "success" : "warning"}>{order.readiness?.ready ? "Ready" : "Not ready"}</Badge>
         </div>
         <p className="text-xs text-muted">
           {progress.passed} of {progress.total} checks complete
         </p>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
-        <div
-          className="h-full bg-blue-700 transition-all"
-          style={{ width: `${progress.percent}%` }}
-        />
-      </div>
-      {failed.length ? (
-        <div className="mt-2">
-          <p className="text-sm text-amber-700">
-            Missing: {missingSummary}
-            {failed.length > 2 ? ` and ${failed.length - 2} more` : ""}
-          </p>
-          <button
-            type="button"
-            className="mt-1 text-xs font-semibold text-blue-700 hover:text-blue-900"
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded
-              ? "Hide checks"
-              : `View ${failed.length} missing requirements`}
-          </button>
-          {expanded ? (
-            <div className="mt-2 grid gap-1.5">
-              {failed.map((check, index) => (
-                <button
-                  key={`${check.code}-${check.order_item_id || index}`}
-                  type="button"
-                  className="flex items-center gap-2 text-left text-sm font-medium text-slate-700 hover:text-blue-700"
-                  onClick={() => scrollToCheck(check)}
-                >
-                  <HiOutlineExclamationTriangle className="h-4 w-4 text-amber-600" />
-                  {check.message}
-                </button>
-              ))}
-            </div>
-          ) : null}
+        <div className="mt-2 grid gap-1">
+          {visibleChecks.map((check, index) => {
+            const content = (
+              <>
+                <span className={clsx("flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold", check.passed ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700")}>
+                  {check.passed ? "✓" : "!"}
+                </span>
+                <span className="truncate">{check.message.replace(/\.$/, "")}</span>
+              </>
+            );
+            return check.passed ? (
+              <div key={`${check.code}-${check.order_item_id || index}`} className="flex min-w-0 items-center gap-2 text-xs text-slate-700">
+                {content}
+              </div>
+            ) : (
+              <button key={`${check.code}-${check.order_item_id || index}`} type="button" className="flex min-w-0 items-center gap-2 text-left text-xs font-semibold text-amber-800 hover:text-blue-700" aria-label={check.message.replace(/\.$/, "")} onClick={() => scrollToCheck(check)}>
+                {content}
+              </button>
+            );
+          })}
         </div>
-      ) : null}
+        {checks.length > visibleChecks.length || expanded ? (
+          <button type="button" className="mt-2 text-xs font-semibold text-blue-700 hover:text-blue-900" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? "Hide requirements" : `View all requirements (${checks.length})`}
+          </button>
+        ) : null}
+      </div>
+      <CircularReadinessProgress progress={progress} ready={Boolean(order.readiness?.ready)} critical={failed.length > 0} />
     </section>
   );
 }
 
+function CircularReadinessProgress({
+  progress,
+  ready,
+  critical,
+}: {
+  progress: { passed: number; total: number; percent: number };
+  ready: boolean;
+  critical: boolean;
+}) {
+  const radius = 47;
+  const circumference = 2 * Math.PI * radius;
+  const color = ready ? "#16a34a" : critical ? "#d97706" : "#2563eb";
+  return (
+    <div className="grid justify-items-center gap-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent} aria-label="Order readiness progress">
+      <svg className="h-[124px] w-[124px]" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="10" />
+        <circle
+          cx="60"
+          cy="60"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="10"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference - (progress.percent / 100) * circumference}
+          className="origin-center -rotate-90 transition-[stroke-dashoffset] duration-500 motion-reduce:transition-none"
+        />
+        <text x="60" y="58" textAnchor="middle" className="fill-slate-900 text-2xl font-bold">
+          {progress.percent}%
+        </text>
+        <text x="60" y="78" textAnchor="middle" className="fill-slate-500 text-[11px]">
+          {progress.passed} / {progress.total} checks
+        </text>
+      </svg>
+      <Badge tone={ready ? "success" : "warning"}>{ready ? "Ready" : "Not ready"}</Badge>
+    </div>
+  );
+}
 export const OrderReadinessPanel = CompactReadinessBar;
 
 export function AddListingDialog({
@@ -2618,7 +2716,8 @@ function OrderItemAccordion({
         </div>
       </button>
       {open ? (
-        <div id={`order-item-panel-${item.id}`} className="grid gap-4 border-t border-border px-4 py-4">
+        <div id={`order-item-panel-${item.id}`} className="grid gap-4 border-t border-border px-4 py-4 lg:grid-cols-[minmax(380px,0.9fr)_minmax(480px,1.1fr)]">
+          <div className="grid content-start gap-4">
           <section className="grid gap-3">
             <SectionHeading title="Customer Information" />
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))]">
@@ -2738,8 +2837,9 @@ function OrderItemAccordion({
               />
             </Field>
           </section>
+          </div>
 
-          <section className="grid gap-4">
+          <section className="grid content-start gap-4">
             <div className="grid gap-3">
               <SectionHeading title="Customer Assets" />
               <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
@@ -2764,7 +2864,7 @@ function OrderItemAccordion({
               </div>
             </div>
             <div className="grid gap-3">
-              <SectionHeading title="Designs and Mockups" />
+              <SectionHeading title="Designs" />
               <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
               <ProductionFileSlot
                 orderId={order.id}
@@ -2791,6 +2891,20 @@ function OrderItemAccordion({
                 orderId={order.id}
                 listingId={line.listing_id}
                 item={item}
+                label="Additional Design"
+                fileType="design"
+                usage="additional_design"
+                onChanged={onChanged}
+              />
+            </div>
+          </div>
+            <div className="grid gap-3">
+              <SectionHeading title="Mockups" />
+              <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
+              <ProductionFileSlot
+                orderId={order.id}
+                listingId={line.listing_id}
+                item={item}
                 label="Mockup 1"
                 fileType="mockup"
                 usage="mockup"
@@ -2803,15 +2917,6 @@ function OrderItemAccordion({
                 label="Mockup 2"
                 fileType="mockup"
                 usage="mockup2"
-                onChanged={onChanged}
-              />
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Additional Design"
-                fileType="design"
-                usage="additional_design"
                 onChanged={onChanged}
               />
             </div>
@@ -3514,7 +3619,7 @@ export function ShippingLabelPanel({
     Boolean(active?.original_name.toLowerCase().endsWith(".pdf"));
   const tileURL = active?.url || localPreview?.url;
   return (
-    <section id="shipping-label-section" className={clsx("grid gap-2", compact ? "content-start" : "pb-6")}>
+    <section id="shipping-label-section" className={clsx("grid justify-items-start gap-2", compact ? "content-start" : "pb-6")}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-sm font-bold">Shipping Label</h2>
         {active ? (
@@ -3543,10 +3648,10 @@ export function ShippingLabelPanel({
         }}
       />
       {active && previewFile ? (
-        <div className="w-full max-w-[220px]">
+        <div className="w-full max-w-[170px]">
           <button
             type="button"
-            className="group relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border bg-slate-50 text-slate-500 transition hover:border-blue-700"
+            className="group relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-slate-50 text-slate-500 transition hover:border-blue-700"
             aria-label="Preview shipping label"
             onClick={() => setPreviewOpen(true)}
           >
@@ -3557,11 +3662,12 @@ export function ShippingLabelPanel({
                 className="h-full w-full object-contain"
               />
             ) : tileURL && isPdf ? (
-              <iframe
-                src={tileURL}
-                title={active.original_name}
-                className="pointer-events-none h-full w-full bg-white"
-              />
+              <span className="grid h-full w-full place-items-center bg-white px-3 text-center">
+                <span className="grid justify-items-center gap-2">
+                  <HiOutlineDocument className="h-10 w-10" />
+                  <span className="max-w-full truncate text-xs font-semibold">PDF label</span>
+                </span>
+              </span>
             ) : (
               <span className="grid justify-items-center gap-1 px-3">
                 <HiOutlineDocument className="h-8 w-8" />
@@ -3632,7 +3738,7 @@ export function ShippingLabelPanel({
       ) : (
         <button
           type="button"
-          className="flex aspect-[4/3] w-full max-w-[220px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-white p-3 text-center text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
+          className="flex aspect-[2/3] w-full max-w-[170px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-white p-3 text-center text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
           disabled={upload.isPending}
           onClick={() => inputRef.current?.click()}
         >

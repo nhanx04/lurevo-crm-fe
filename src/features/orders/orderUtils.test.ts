@@ -7,6 +7,7 @@ import {
   listingSupplierReady,
   orderStatusAccent,
   readinessProgress,
+  workflowTransitions,
 } from "./orderUtils";
 
 const baseOrder: Order = {
@@ -98,5 +99,22 @@ describe("order utilities", () => {
       status: { id: "status-3", name: "Cancelled", code: "cancelled" },
     };
     expect(allowedWorkflowActions(order, true).size).toBe(0);
+  });
+
+  it("keeps awaiting review primary transition visible when readiness is missing", () => {
+    const order = {
+      ...baseOrder,
+      status: { id: "status-2", name: "Awaiting Review", code: "awaiting_review" },
+      readiness: {
+        ready: false,
+        quantity: 1,
+        items: 1,
+        checks: [{ code: "main_design", message: "Main design selected.", passed: false }],
+      },
+    };
+    const markReady = workflowTransitions(order, true).find((transition) => transition.action === "mark_ready");
+    expect(markReady?.primary).toBe(true);
+    expect(markReady?.disabled).toBe(true);
+    expect(markReady?.requires_ready).toBe(true);
   });
 });

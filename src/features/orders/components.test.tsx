@@ -204,12 +204,11 @@ describe("order components", () => {
     expect(syncButton).toBeDisabled();
   });
 
-  it("keeps readiness failures collapsed until requested", () => {
+  it("renders compact readiness checklist and radial progress", () => {
     renderWithProviders(<CompactReadinessBar order={order} />);
     expect(screen.getByText("Order readiness")).toBeInTheDocument();
     expect(screen.getByText("50%")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Shipping label uploaded" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("View 1 missing requirements"));
+    expect(screen.getByRole("progressbar", { name: "Order readiness progress" })).toHaveAttribute("aria-valuenow", "50");
     expect(screen.getByRole("button", { name: "Shipping label uploaded" })).toBeInTheDocument();
   });
 
