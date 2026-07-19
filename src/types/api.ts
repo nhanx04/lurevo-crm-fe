@@ -66,6 +66,8 @@ export type Category = {
   package_length?: string | null;
   package_width?: string | null;
   package_height?: string | null;
+  package_weight_lb?: string | null;
+  package_weight_oz?: string | null;
   dimension_unit?: 'in' | 'cm' | string | null;
   shipping_cost_min?: string | null;
   shipping_cost_max?: string | null;
@@ -74,7 +76,7 @@ export type Category = {
   updated_at: string;
 };
 
-export type CategoryRequest = Partial<Pick<Category, 'name' | 'slug' | 'description' | 'parent_id' | 'sort_order' | 'is_active' | 'metadata' | 'package_length' | 'package_width' | 'package_height' | 'dimension_unit' | 'shipping_cost_min' | 'shipping_cost_max' | 'shipping_currency'>>;
+export type CategoryRequest = Partial<Pick<Category, 'name' | 'slug' | 'description' | 'parent_id' | 'sort_order' | 'is_active' | 'metadata' | 'package_length' | 'package_width' | 'package_height' | 'package_weight_lb' | 'package_weight_oz' | 'dimension_unit' | 'shipping_cost_min' | 'shipping_cost_max' | 'shipping_currency'>>;
 
 export type ListingStatus = {
   id: string;
@@ -610,8 +612,28 @@ export type ProductPerformanceRow = {
   average_cost_per_item: string;
   supplier_errors: number;
   cancelled_orders: number;
+  ready_rate?: string | null;
+  supplier_success_rate?: string | null;
+  performance_score?: number | null;
+  performance_status?: string;
+  data_confidence: 'low' | 'medium' | 'high' | string;
+  score_components: {
+    volume: PerformanceScoreComponent;
+    readiness: PerformanceScoreComponent;
+    supplier_success: PerformanceScoreComponent;
+    cost_efficiency: PerformanceScoreComponent;
+  };
+  available_metrics: string[];
+  missing_metrics: string[];
+  sample_size: { orders: number; quantity: number };
   custom_design_percent: string;
   library_design_percent: string;
+};
+
+export type PerformanceScoreComponent = {
+  score?: number | null;
+  weight: number;
+  available: boolean;
 };
 
 export type AnalyticsOverview = {

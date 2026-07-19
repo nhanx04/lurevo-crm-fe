@@ -23,6 +23,8 @@ describe('schemas', () => {
       package_length: '12',
       package_width: '8',
       package_height: '4',
+      package_weight_lb: '1',
+      package_weight_oz: '4',
       dimension_unit: 'in',
       shipping_cost_min: '12.00',
       shipping_cost_max: '8.00',
@@ -43,6 +45,8 @@ describe('schemas', () => {
       package_length: '',
       package_width: '',
       package_height: '',
+      package_weight_lb: '',
+      package_weight_oz: '',
       dimension_unit: 'in',
       shipping_cost_min: '',
       shipping_cost_max: '',
@@ -50,6 +54,28 @@ describe('schemas', () => {
       metadataText: '{}',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('requires category package ounces to stay under one pound', () => {
+    const result = categorySchema.safeParse({
+      name: 'Poster',
+      slug: '',
+      description: '',
+      parent_id: '',
+      sort_order: 0,
+      is_active: true,
+      package_length: '12',
+      package_width: '8',
+      package_height: '4',
+      package_weight_lb: '0',
+      package_weight_oz: '16',
+      dimension_unit: 'in',
+      shipping_cost_min: '',
+      shipping_cost_max: '',
+      shipping_currency: '',
+      metadataText: '{}',
+    });
+    expect(result.success).toBe(false);
   });
 
   it('requires prompt content and a supported type', () => {

@@ -65,8 +65,24 @@ function categoryDimension(category: Category) {
   const width = cleanNumber(category.package_width);
   const height = cleanNumber(category.package_height);
   const unit = category.dimension_unit;
-  if (!length || !width || !height || !unit) return "Not set";
-  return `${length} × ${width} × ${height} ${unit}`;
+  const weight = categoryWeight(category);
+  const parts: string[] = [];
+  if (length && width && height && unit) {
+    parts.push(`${length} x ${width} x ${height} ${unit}`);
+  }
+  if (weight) {
+    parts.push(weight);
+  }
+  return parts.length ? parts.join(" / ") : "Not set";
+}
+
+function categoryWeight(category: Category) {
+  const pounds = cleanNumber(category.package_weight_lb);
+  const ounces = cleanNumber(category.package_weight_oz);
+  const parts: string[] = [];
+  if (pounds) parts.push(`${pounds} lb`);
+  if (ounces) parts.push(`${ounces} oz`);
+  return parts.join(" ");
 }
 
 function categoryShipping(category: Category) {
@@ -311,6 +327,8 @@ function CategoryModal({
       package_length: category?.package_length || "",
       package_width: category?.package_width || "",
       package_height: category?.package_height || "",
+      package_weight_lb: category?.package_weight_lb || "",
+      package_weight_oz: category?.package_weight_oz || "",
       dimension_unit: (category?.dimension_unit as "in" | "cm") || "in",
       shipping_cost_min: category?.shipping_cost_min || "",
       shipping_cost_max: category?.shipping_cost_max || "",
@@ -330,6 +348,8 @@ function CategoryModal({
         package_length: values.package_length || undefined,
         package_width: values.package_width || undefined,
         package_height: values.package_height || undefined,
+        package_weight_lb: values.package_weight_lb || undefined,
+        package_weight_oz: values.package_weight_oz || undefined,
         dimension_unit: values.dimension_unit || undefined,
         shipping_cost_min: values.shipping_cost_min || undefined,
         shipping_cost_max: values.shipping_cost_max || undefined,
@@ -408,7 +428,7 @@ function CategoryModal({
               Shipping & Package
             </h3>
             <p className="mt-1 text-xs text-muted">
-              Package dimensions used when purchasing a shipping label.
+              Package dimensions and weight used when purchasing a shipping label.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_96px]">
@@ -452,6 +472,26 @@ function CategoryModal({
           <p className="text-xs text-muted">
             Enter an estimated shipping-cost range because the final carrier rate may vary.
           </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Package weight lb"
+              error={
+                form.formState.errors.package_weight_lb?.message ||
+                firstFieldError(serverErrors?.details, "package_weight_lb")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("package_weight_lb")} />
+            </Field>
+            <Field
+              label="Package weight oz"
+              error={
+                form.formState.errors.package_weight_oz?.message ||
+                firstFieldError(serverErrors?.details, "package_weight_oz")
+              }
+            >
+              <Input type="number" min="0" max="15.99" step="0.01" {...form.register("package_weight_oz")} />
+            </Field>
+          </div>
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr_110px]">
             <Field
               label="Minimum shipping cost"

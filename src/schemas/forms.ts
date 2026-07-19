@@ -17,6 +17,8 @@ export const categorySchema = z.object({
   package_length: z.string().optional(),
   package_width: z.string().optional(),
   package_height: z.string().optional(),
+  package_weight_lb: z.string().optional(),
+  package_weight_oz: z.string().optional(),
   dimension_unit: z.enum(['in', 'cm']).optional(),
   shipping_cost_min: z.string().optional(),
   shipping_cost_max: z.string().optional(),
@@ -30,6 +32,16 @@ export const categorySchema = z.object({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Use a number greater than 0' });
     }
   });
+  (['package_weight_lb', 'package_weight_oz'] as const).forEach((field) => {
+    const value = data[field]?.trim();
+    if (value && (!positive.test(value) || Number(value) < 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Use a non-negative number' });
+    }
+  });
+  const ounces = data.package_weight_oz?.trim();
+  if (ounces && Number(ounces) >= 16) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['package_weight_oz'], message: 'Ounces must be less than 16' });
+  }
   (['shipping_cost_min', 'shipping_cost_max'] as const).forEach((field) => {
     const value = data[field]?.trim();
     if (value && (!positive.test(value) || Number(value) < 0)) {
