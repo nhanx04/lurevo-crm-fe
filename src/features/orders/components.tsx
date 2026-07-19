@@ -2279,7 +2279,9 @@ export function CompactReadinessBar({ order, className }: { order: Order; classN
   const visibleChecks = expanded ? checks : checks.slice(0, 5);
   const rootClass = className === "contents"
     ? "contents"
-    : clsx("grid min-w-0 gap-4 md:grid-cols-[minmax(320px,1fr)_150px] md:items-center", className);
+    : className === "stacked"
+      ? "grid min-w-0 gap-4"
+      : clsx("grid min-w-0 gap-4 md:grid-cols-[minmax(320px,1fr)_150px] md:items-center", className);
   return (
     <section className={rootClass}>
       <div className="min-w-0">
@@ -2864,63 +2866,58 @@ function OrderItemAccordion({
               </div>
             </div>
             <div className="grid gap-3">
-              <SectionHeading title="Designs" />
+              <SectionHeading title="Designs and Mockups" />
               <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Main Design"
-                fileType="design"
-                usage="main_design"
-                position={draft.main_position}
-                required
-                onChanged={onChanged}
-              />
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Sub Design"
-                fileType="design"
-                usage="sub_design"
-                position={draft.sub_position}
-                onChanged={onChanged}
-              />
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Additional Design"
-                fileType="design"
-                usage="additional_design"
-                onChanged={onChanged}
-              />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Main Design"
+                  fileType="design"
+                  usage="main_design"
+                  position={draft.main_position}
+                  required
+                  onChanged={onChanged}
+                />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Sub Design"
+                  fileType="design"
+                  usage="sub_design"
+                  position={draft.sub_position}
+                  onChanged={onChanged}
+                />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Additional Design"
+                  fileType="design"
+                  usage="additional_design"
+                  onChanged={onChanged}
+                />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Mockup 1"
+                  fileType="mockup"
+                  usage="mockup"
+                  onChanged={onChanged}
+                />
+                <ProductionFileSlot
+                  orderId={order.id}
+                  listingId={line.listing_id}
+                  item={item}
+                  label="Mockup 2"
+                  fileType="mockup"
+                  usage="mockup2"
+                  onChanged={onChanged}
+                />
+              </div>
             </div>
-          </div>
-            <div className="grid gap-3">
-              <SectionHeading title="Mockups" />
-              <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Mockup 1"
-                fileType="mockup"
-                usage="mockup"
-                onChanged={onChanged}
-              />
-              <ProductionFileSlot
-                orderId={order.id}
-                listingId={line.listing_id}
-                item={item}
-                label="Mockup 2"
-                fileType="mockup"
-                usage="mockup2"
-                onChanged={onChanged}
-              />
-            </div>
-          </div>
           </section>
         </div>
       ) : null}

@@ -210,28 +210,25 @@ export function OrderDetailPage() {
         </OrderHeader>
       </div>
 
-      <section className="grid gap-4 rounded-xl border border-border bg-white p-4 shadow-sm xl:grid-cols-[minmax(320px,1fr)_150px_190px] xl:items-center">
-        <CompactReadinessBar order={data} className="contents" />
-        <ShippingLabelPanel order={data} onChanged={() => void refresh()} compact />
-        <div className="border-t border-border pt-3 xl:col-span-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-sm font-bold">Products</h2>
-              <p className="text-sm text-muted">{data.products_count} products / {data.items_count} items</p>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,8fr)_minmax(240px,2fr)] xl:items-start">
+        <main className="space-y-4">
+          <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-bold">Products</h2>
+                <p className="text-sm text-muted">{data.products_count} products / {data.items_count} items</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set(allItemIds))}>Expand All</Button>
+                <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set())}>Collapse All</Button>
+                <Button type="button" size="sm" onClick={() => setAddListingOpen(true)}>
+                  <HiOutlinePlus />
+                  Add Listing
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set(allItemIds))}>Expand All</Button>
-              <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set())}>Collapse All</Button>
-              <Button type="button" size="sm" onClick={() => setAddListingOpen(true)}>
-                <HiOutlinePlus />
-                Add Listing
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <main className="space-y-4">
           {data.lines?.map((line) => (
             <OrderLineCard
               key={line.id}
@@ -245,11 +242,21 @@ export function OrderDetailPage() {
             />
           ))}
           {!data.lines?.length ? (
-            <div className="border-b border-border py-6">
+            <div className="rounded-xl border border-border bg-white p-6">
               <p className="text-sm text-muted">Add a Listing to generate production items.</p>
             </div>
           ) : null}
-      </main>
+        </main>
+
+        <aside className="space-y-4 xl:sticky xl:top-32">
+          <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <CompactReadinessBar order={data} className="stacked" />
+          </section>
+          <section className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <ShippingLabelPanel order={data} onChanged={() => void refresh()} compact />
+          </section>
+        </aside>
+      </div>
 
       <OrderDetailsDrawer order={data} activeTab={drawer} onClose={() => setDrawer(null)} />
 
