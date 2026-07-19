@@ -11,6 +11,7 @@ import {
   HiOutlinePhoto,
   HiOutlineRectangleStack,
   HiOutlineShoppingBag,
+  HiOutlineSparkles,
   HiOutlineSquares2X2,
   HiOutlineTag,
   HiOutlineUsers,
@@ -39,6 +40,7 @@ const routeMeta = [
   { match: /^\/app\/listings$/, title: "Listings" },
   { match: /^\/app\/categories$/, title: "Categories" },
   { match: /^\/app\/listing-statuses$/, title: "Listing Statuses" },
+  { match: /^\/app\/settings\/prompts$/, title: "Prompt Library" },
   { match: /^\/app\/shops$/, title: "Etsy Shops" },
   { match: /^\/app\/collaborators$/, title: "Collaborators" },
   { match: /^\/app\/account\/change-password$/, title: "Change Password" },
@@ -75,6 +77,7 @@ const navigationGroups = [
     items: [
       { to: "/app/categories", label: "Categories", icon: HiOutlineFolder },
       { to: "/app/listing-statuses", label: "Statuses", icon: HiOutlineTag },
+      { to: "/app/settings/prompts", label: "Prompt Library", icon: HiOutlineSparkles },
       { to: "/app/shops", label: "Etsy Shops", icon: HiOutlineShoppingBag },
       {
         to: "/app/collaborators",

@@ -18,6 +18,7 @@ import {
   ListingsPage,
 } from "./pages/listings";
 import { OrderCreatePage, OrderDetailPage, OrdersPage } from "./pages/orders";
+import { PromptLibraryPage } from "./pages/prompts";
 import {
   NotFoundPage,
   OwnerRoute,
@@ -31,6 +32,7 @@ export function App() {
       <Route path="/" element={<Navigate to="/app/dashboard" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route path="/settings/prompts" element={<Navigate to="/app/settings/prompts" replace />} />
         <Route path="/app" element={<AppShell />}>
           <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
@@ -44,6 +46,7 @@ export function App() {
           <Route path="listings/:id/edit" element={<ListingEditPage />} />
           <Route path="categories" element={<CategoriesPage />} />
           <Route path="listing-statuses" element={<StatusesPage />} />
+          <Route path="settings/prompts" element={<PromptLibraryPage />} />
           <Route path="shops" element={<ShopsPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="design-library" element={<DesignLibraryPage />} />

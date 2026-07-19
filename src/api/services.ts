@@ -30,6 +30,10 @@ import type {
   OrderReadiness,
   OrderRequest,
   OrderLine,
+  Prompt,
+  PromptImage,
+  PromptParams,
+  PromptRequest,
   ShippingLabel,
   Shop,
   ShopRequest,
@@ -141,6 +145,29 @@ export const orderApi = {
   cancel: (orderId: string, body?: { reason?: string }) => apiPost<Order>(`/orders/${orderId}/cancel`, body || {}),
   putOnHold: (orderId: string, body?: { note?: string }) => apiPost<Order>(`/orders/${orderId}/put-on-hold`, body || {}),
   resume: (orderId: string) => apiPost<Order>(`/orders/${orderId}/resume`, {}),
+};
+
+export const promptApi = {
+  list: (params: PromptParams) => apiGet<ListResponse<Prompt>>('/prompts', { params }),
+  detail: (id: string) => apiGet<Prompt>(`/prompts/${id}`),
+  create: (body: PromptRequest) => apiPost<Prompt>('/prompts', body),
+  update: (id: string, body: PromptRequest) => apiPatch<Prompt>(`/prompts/${id}`, body),
+  remove: (id: string) => apiDelete(`/prompts/${id}`),
+  setState: (id: string, state: 'active' | 'inactive') => apiPatch<Prompt>(`/prompts/${id}/state`, { state }),
+  addImages: (id: string, imageIds: string[]) => apiPost<Prompt>(`/prompts/${id}/images`, { image_ids: imageIds }),
+  removeImage: (id: string, imageId: string) => apiDelete(`/prompts/${id}/images/${imageId}`),
+};
+
+export const promptImageApi = {
+  list: (params: { page?: number; limit?: number; search?: string }) => apiGet<ListResponse<PromptImage>>('/prompt-images', { params }),
+  upload: (files: File[]) => {
+    const body = new FormData();
+    files.forEach((file) => body.append('images', file));
+    return apiPost<PromptImage[]>('/prompt-images', body, { headers: { 'Content-Type': undefined } });
+  },
+  createExternal: (body: { image_url: string; file_name: string; file_size?: number; mime_type?: string; alt_text?: string | null }) =>
+    apiPost<PromptImage>('/prompt-images', body),
+  remove: (id: string) => apiDelete(`/prompt-images/${id}`),
 };
 
 export const designLibraryApi = {

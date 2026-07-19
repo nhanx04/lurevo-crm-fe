@@ -53,6 +53,35 @@ function activeParam(value?: string): boolean | "" {
   return "";
 }
 
+function cleanNumber(value?: string | null) {
+  if (!value) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return value;
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function categoryDimension(category: Category) {
+  const length = cleanNumber(category.package_length);
+  const width = cleanNumber(category.package_width);
+  const height = cleanNumber(category.package_height);
+  const unit = category.dimension_unit;
+  if (!length || !width || !height || !unit) return "Not set";
+  return `${length} × ${width} × ${height} ${unit}`;
+}
+
+function categoryShipping(category: Category) {
+  const min = category.shipping_cost_min;
+  const max = category.shipping_cost_max;
+  if (!min && !max) return "Not set";
+  const currency = category.shipping_currency || "USD";
+  const fmt = new Intl.NumberFormat(undefined, { style: "currency", currency });
+  const minValue = Number(min || max);
+  const maxValue = Number(max || min);
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) return "Not set";
+  if (minValue === maxValue) return fmt.format(minValue);
+  return `${fmt.format(minValue)} - ${fmt.format(maxValue)}`;
+}
+
 export function CategoriesPage() {
   const { params, setParam, setPage } = useUrlParams();
   const queryClient = useQueryClient();
@@ -150,6 +179,8 @@ export function CategoriesPage() {
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Slug</th>
                 <th className="px-4 py-3">Parent</th>
+                <th className="px-4 py-3">Dimension</th>
+                <th className="px-4 py-3">Estimated shipping cost</th>
                 <th className="px-4 py-3">Sort order</th>
                 <th className="px-4 py-3">State</th>
                 <th className="px-4 py-3">Updated</th>
@@ -177,6 +208,12 @@ export function CategoriesPage() {
                     {allCategories.data?.data.find(
                       (item) => item.id === category.parent_id,
                     )?.name || "None"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted">
+                    {categoryDimension(category)}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-muted">
+                    {categoryShipping(category)}
                   </td>
                   <td className="px-4 py-3">{category.sort_order}</td>
                   <td className="px-4 py-3">
@@ -271,6 +308,13 @@ function CategoryModal({
       parent_id: category?.parent_id || "",
       sort_order: category?.sort_order ?? 0,
       is_active: category?.is_active ?? true,
+      package_length: category?.package_length || "",
+      package_width: category?.package_width || "",
+      package_height: category?.package_height || "",
+      dimension_unit: (category?.dimension_unit as "in" | "cm") || "in",
+      shipping_cost_min: category?.shipping_cost_min || "",
+      shipping_cost_max: category?.shipping_cost_max || "",
+      shipping_currency: category?.shipping_currency || "USD",
       metadataText: JSON.stringify(category?.metadata || {}, null, 2),
     },
   });
@@ -283,6 +327,13 @@ function CategoryModal({
         parent_id: values.parent_id || undefined,
         sort_order: values.sort_order,
         is_active: values.is_active,
+        package_length: values.package_length || undefined,
+        package_width: values.package_width || undefined,
+        package_height: values.package_height || undefined,
+        dimension_unit: values.dimension_unit || undefined,
+        shipping_cost_min: values.shipping_cost_min || undefined,
+        shipping_cost_max: values.shipping_cost_max || undefined,
+        shipping_currency: (values.shipping_currency || "USD").toUpperCase(),
         metadata: jsonObjectFromText(values.metadataText),
       };
       return category
@@ -350,6 +401,86 @@ function CategoryModal({
           <label className="mt-8 flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" {...form.register("is_active")} /> Active
           </label>
+        </div>
+        <div className="grid gap-4 border-t border-border pt-4">
+          <div>
+            <h3 className="text-sm font-bold text-foreground">
+              Shipping & Package
+            </h3>
+            <p className="mt-1 text-xs text-muted">
+              Package dimensions used when purchasing a shipping label.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1fr_96px]">
+            <Field
+              label="Package length"
+              error={
+                form.formState.errors.package_length?.message ||
+                firstFieldError(serverErrors?.details, "package_length")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("package_length")} />
+            </Field>
+            <Field
+              label="Package width"
+              error={
+                form.formState.errors.package_width?.message ||
+                firstFieldError(serverErrors?.details, "package_width")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("package_width")} />
+            </Field>
+            <Field
+              label="Package height"
+              error={
+                form.formState.errors.package_height?.message ||
+                firstFieldError(serverErrors?.details, "package_height")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("package_height")} />
+            </Field>
+            <Field
+              label="Unit"
+              error={firstFieldError(serverErrors?.details, "dimension_unit")}
+            >
+              <Select {...form.register("dimension_unit")}>
+                <option value="in">in</option>
+                <option value="cm">cm</option>
+              </Select>
+            </Field>
+          </div>
+          <p className="text-xs text-muted">
+            Enter an estimated shipping-cost range because the final carrier rate may vary.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_110px]">
+            <Field
+              label="Minimum shipping cost"
+              error={
+                form.formState.errors.shipping_cost_min?.message ||
+                firstFieldError(serverErrors?.details, "shipping_cost_min")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("shipping_cost_min")} />
+            </Field>
+            <Field
+              label="Maximum shipping cost"
+              error={
+                form.formState.errors.shipping_cost_max?.message ||
+                firstFieldError(serverErrors?.details, "shipping_cost_max")
+              }
+            >
+              <Input type="number" min="0" step="0.01" {...form.register("shipping_cost_max")} />
+            </Field>
+            <Field
+              label="Currency"
+              error={
+                form.formState.errors.shipping_currency?.message ||
+                firstFieldError(serverErrors?.details, "shipping_currency")
+              }
+            >
+              <Input maxLength={3} {...form.register("shipping_currency")} />
+            </Field>
+          </div>
         </div>
         <Field
           label="Metadata JSON"

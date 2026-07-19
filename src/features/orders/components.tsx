@@ -2189,7 +2189,7 @@ function CancelOrderDialog({
   );
 }
 
-export function CompactReadinessBar({ order }: { order: Order }) {
+export function CompactReadinessBar({ order, className }: { order: Order; className?: string }) {
   const progress = readinessProgress(order.readiness);
   const failed = order.readiness?.checks.filter((check) => !check.passed) || [];
   const [expanded, setExpanded] = useState(false);
@@ -2206,7 +2206,7 @@ export function CompactReadinessBar({ order }: { order: Order }) {
     .map((check) => check.message.replace(/\.$/, "").toLowerCase())
     .join(" and ");
   return (
-    <section className="border-b border-border pb-4">
+    <section className={clsx("min-w-0", className)}>
       <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <p className="font-bold">Order readiness</p>
@@ -2502,12 +2502,12 @@ export function OrderLineCard({
   return (
     <section
       id={`order-line-${line.id}`}
-      className="border-b border-border pb-5"
+      className="rounded-xl border border-border bg-white p-4 shadow-sm"
     >
-      <div className="flex flex-col gap-3 py-1 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="font-bold">{line.listing_title}</h2>
-          <p className="text-sm text-muted">
+      <div className="flex flex-col gap-3 pb-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <h2 className="truncate text-base font-bold">{line.listing_title}</h2>
+          <p className="truncate text-sm text-muted">
             SKU {line.listing_sku || "None"} / Supplier {line.supplier_sku} /
             Qty {line.quantity} / {line.personalization_mode}
           </p>
@@ -2527,7 +2527,7 @@ export function OrderLineCard({
           </ActionIconButton>
         </div>
       </div>
-      <div className="grid gap-3">
+      <div className="grid gap-3 border-t border-border pt-3">
         {line.items.map((item, index) => (
           <OrderItemAccordion
             key={item.id}
@@ -2588,19 +2588,19 @@ function OrderItemAccordion({
     (file) => file.usage === "sub_design" && file.is_selected,
   );
   return (
-    <div id={`order-item-${item.id}`} className="bg-white p-4">
+    <div id={`order-item-${item.id}`} className="rounded-lg border border-border bg-white">
       <button
         type="button"
-        className="flex w-full flex-col gap-2 border-t border-border py-3 text-left md:flex-row md:items-center md:justify-between"
+        className="flex w-full flex-col gap-2 px-4 py-3 text-left transition hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
         aria-expanded={open}
         aria-controls={`order-item-panel-${item.id}`}
         onClick={() => onToggle(!open)}
       >
-        <div>
+        <div className="min-w-0">
           <p className="font-semibold">
             Item {item.item_number} / Qty {item.quantity}
           </p>
-          <p className="text-xs text-muted">
+          <p className="truncate text-xs text-muted">
             {supplierConfigSummary(draft) || "Configuration missing"}
           </p>
         </div>
@@ -2618,14 +2618,14 @@ function OrderItemAccordion({
         </div>
       </button>
       {open ? (
-        <div id={`order-item-panel-${item.id}`} className="grid gap-4 pb-4">
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="grid gap-2.5 xl:border-r xl:border-border xl:pr-4">
-              <SectionHeading title="Customer Information" />
+        <div id={`order-item-panel-${item.id}`} className="grid gap-4 border-t border-border px-4 py-4">
+          <section className="grid gap-3">
+            <SectionHeading title="Customer Information" />
+            <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))]">
               <Field label="Personalization Text">
                 <Textarea
-                  rows={1}
-                  className="min-h-10 max-h-24 resize-y py-2"
+                  rows={2}
+                  className="min-h-[76px] max-h-32 resize-y py-2"
                   placeholder="Enter personalization text"
                   value={draft.personalization_text || ""}
                   onChange={(event) =>
@@ -2638,8 +2638,8 @@ function OrderItemAccordion({
               </Field>
               <Field label="Customer Note">
                 <Textarea
-                  rows={1}
-                  className="min-h-10 max-h-24 resize-y py-2"
+                  rows={2}
+                  className="min-h-[76px] max-h-32 resize-y py-2"
                   placeholder="Optional customer note"
                   value={draft.customer_note || ""}
                   onChange={(event) =>
@@ -2650,7 +2650,99 @@ function OrderItemAccordion({
                   }
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <SectionHeading title="Production Configuration" compact />
+              {previousItem ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  onClick={() =>
+                    onDraftChange({
+                      ...draft,
+                      option: previousItem.option,
+                      color: previousItem.color,
+                      print_method: previousItem.print_method,
+                      main_position: previousItem.main_position,
+                      sub_position: previousItem.sub_position,
+                    })
+                  }
+                >
+                  Copy previous config
+                </Button>
+              ) : null}
+            </div>
+            <div
+              id={`supplier-config-${item.id}`}
+              className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr))]"
+            >
+              <Info label="Supplier SKU" value={item.supplier_sku} />
+              <VariantSelect
+                label="Option"
+                values={line.supplier.options}
+                value={draft.option || ""}
+                onChange={(value) =>
+                  onDraftChange({ ...draft, option: value })
+                }
+              />
+              <VariantSelect
+                label="Color"
+                values={line.supplier.colors}
+                value={draft.color || ""}
+                onChange={(value) =>
+                  onDraftChange({ ...draft, color: value })
+                }
+              />
+              <VariantSelect
+                label="Print Method"
+                values={line.supplier.print_methods}
+                value={draft.print_method || ""}
+                onChange={(value) =>
+                  onDraftChange({ ...draft, print_method: value })
+                }
+              />
+              <VariantSelect
+                label="Main Position"
+                values={line.supplier.positions}
+                value={draft.main_position || ""}
+                onChange={(value) =>
+                  onDraftChange({ ...draft, main_position: value })
+                }
+              />
+              {hasSubDesign ? (
+                <VariantSelect
+                  label="Sub Position"
+                  values={line.supplier.positions}
+                  value={draft.sub_position || ""}
+                  optional
+                  onChange={(value) =>
+                    onDraftChange({ ...draft, sub_position: value })
+                  }
+                />
+              ) : null}
+            </div>
+            <Field label="Production Notice">
+              <Input
+                value={draft.production_notice || ""}
+                placeholder="Optional production note"
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draft,
+                    production_notice: event.target.value,
+                  })
+                }
+              />
+            </Field>
+          </section>
+
+          <section className="grid gap-4">
+            <div className="grid gap-3">
+              <SectionHeading title="Customer Assets" />
+              <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
                 <ProductionFileSlot
                   orderId={order.id}
                   listingId={line.listing_id}
@@ -2671,94 +2763,9 @@ function OrderItemAccordion({
                 />
               </div>
             </div>
-            <div className="grid gap-2.5">
-              <SectionHeading title="Production Configuration" />
-              <div
-                id={`supplier-config-${item.id}`}
-                className="grid gap-2.5 md:grid-cols-3"
-              >
-                <Info label="Supplier SKU" value={item.supplier_sku} />
-                <VariantSelect
-                  label="Option"
-                  values={line.supplier.options}
-                  value={draft.option || ""}
-                  onChange={(value) =>
-                    onDraftChange({ ...draft, option: value })
-                  }
-                />
-                <VariantSelect
-                  label="Color"
-                  values={line.supplier.colors}
-                  value={draft.color || ""}
-                  onChange={(value) =>
-                    onDraftChange({ ...draft, color: value })
-                  }
-                />
-                <VariantSelect
-                  label="Print Method"
-                  values={line.supplier.print_methods}
-                  value={draft.print_method || ""}
-                  onChange={(value) =>
-                    onDraftChange({ ...draft, print_method: value })
-                  }
-                />
-                <VariantSelect
-                  label="Main Position"
-                  values={line.supplier.positions}
-                  value={draft.main_position || ""}
-                  onChange={(value) =>
-                    onDraftChange({ ...draft, main_position: value })
-                  }
-                />
-                {hasSubDesign ? (
-                  <VariantSelect
-                    label="Sub Position"
-                    values={line.supplier.positions}
-                    value={draft.sub_position || ""}
-                    optional
-                    onChange={(value) =>
-                      onDraftChange({ ...draft, sub_position: value })
-                    }
-                  />
-                ) : null}
-              </div>
-              <Field label="Production Notice">
-                <Input
-                  value={draft.production_notice || ""}
-                  onChange={(event) =>
-                    onDraftChange({
-                      ...draft,
-                      production_notice: event.target.value,
-                    })
-                  }
-                />
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                {previousItem ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() =>
-                      onDraftChange({
-                        ...draft,
-                        option: previousItem.option,
-                        color: previousItem.color,
-                        print_method: previousItem.print_method,
-                        main_position: previousItem.main_position,
-                        sub_position: previousItem.sub_position,
-                      })
-                    }
-                  >
-                    Copy previous config
-                  </Button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-          <div className="grid gap-3">
-            <SectionHeading title="Designs and Mockups" />
-            <div className="flex flex-wrap gap-3">
+            <div className="grid gap-3">
+              <SectionHeading title="Designs and Mockups" />
+              <div className="flex gap-3 overflow-x-auto pb-1 sm:flex-wrap">
               <ProductionFileSlot
                 orderId={order.id}
                 listingId={line.listing_id}
@@ -2809,6 +2816,7 @@ function OrderItemAccordion({
               />
             </div>
           </div>
+          </section>
         </div>
       ) : null}
     </div>
@@ -3023,9 +3031,10 @@ function ProductionFileSlot({
     event.preventDefault();
     handleFiles(event.dataTransfer.files);
   }
+  const busy = add.isPending || addFromUrl.isPending || addFromLibrary.isPending;
   return (
     <div
-      className="w-[96px]"
+      className="w-[116px] shrink-0"
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
@@ -3049,13 +3058,13 @@ function ProductionFileSlot({
       <button
         type="button"
         className={clsx(
-          "group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded border bg-white text-slate-500 transition",
+          "group relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-lg border bg-white text-slate-500 transition focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
           selected
             ? "border-border hover:border-blue-700"
             : "border-dashed border-slate-300 hover:border-blue-700 hover:text-blue-700",
         )}
         aria-label={`${selected ? "Replace" : "Upload"} ${label}`}
-        disabled={add.isPending || addFromUrl.isPending}
+        disabled={busy}
         onClick={() => {
           if (canChooseLibraryDesign && !selected) {
             setLibraryOpen(true);
@@ -3064,7 +3073,7 @@ function ProductionFileSlot({
           inputRef.current?.click();
         }}
       >
-        {add.isPending || addFromUrl.isPending || addFromLibrary.isPending ? (
+        {busy ? (
           <Spinner label="Saving" />
         ) : selected?.url && selected.mime_type.startsWith("image/") ? (
           <TransparencyBackground background="checkerboard" className="h-full w-full border-0">
@@ -3075,17 +3084,19 @@ function ProductionFileSlot({
             />
           </TransparencyBackground>
         ) : localPreview?.mime.startsWith("image/") ? (
-          <img
-            src={localPreview.url}
-            alt={localPreview.name}
-            className="h-full w-full object-contain"
-          />
+          <TransparencyBackground background="checkerboard" className="h-full w-full border-0">
+            <img
+              src={localPreview.url}
+              alt={localPreview.name}
+              className="h-full w-full object-contain"
+            />
+          </TransparencyBackground>
         ) : selected ? (
           <FileGlyph file={selected} />
         ) : (
           <span className="grid justify-items-center gap-1">
             <HiOutlineCloudArrowUp className="h-6 w-6" />
-            {canChooseLibraryDesign ? <span className="text-[10px] font-semibold">Upload</span> : null}
+            <span className="text-[10px] font-semibold">Upload</span>
           </span>
         )}
         {selected ? (
@@ -3094,7 +3105,7 @@ function ProductionFileSlot({
           </span>
         ) : null}
       </button>
-      <div className="mt-1 min-h-8">
+      <div className="mt-1">
         {selected ? (
           <>
             <p
@@ -3445,9 +3456,11 @@ function FilePreviewModal({
 export function ShippingLabelPanel({
   order,
   onChanged,
+  compact,
 }: {
   order: Order;
   onChanged: () => void;
+  compact?: boolean;
 }) {
   const toast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -3478,19 +3491,35 @@ export function ShippingLabelPanel({
     },
     [localPreview],
   );
+  const previewFile = active
+    ? {
+        id: active.id,
+        file_id: active.file_id,
+        file_type: "shipping_label",
+        usage: "shipping_label",
+        sort_order: active.version,
+        is_selected: active.is_active,
+        original_name: active.original_name,
+        mime_type:
+          active.mime_type ||
+          localPreview?.mime ||
+          "application/octet-stream",
+        size: localPreview?.size || active.size,
+        created_at: active.uploaded_at,
+      }
+    : null;
+  const isImage = Boolean(previewFile?.mime_type?.startsWith("image/"));
+  const isPdf =
+    previewFile?.mime_type === "application/pdf" ||
+    Boolean(active?.original_name.toLowerCase().endsWith(".pdf"));
+  const tileURL = active?.url || localPreview?.url;
   return (
-    <section id="shipping-label-section" className="grid gap-3 pb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="font-bold">Shipping Label</h2>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={upload.isPending}
-          onClick={() => inputRef.current?.click()}
-        >
-          <HiOutlineCloudArrowUp />
-          {active ? "Replace" : "Upload"}
-        </Button>
+    <section id="shipping-label-section" className={clsx("grid gap-2", compact ? "content-start" : "pb-6")}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-bold">Shipping Label</h2>
+        {active ? (
+          <Badge tone="primary">v{active.version}</Badge>
+        ) : null}
       </div>
       <input
         ref={inputRef}
@@ -3513,69 +3542,120 @@ export function ShippingLabelPanel({
           event.target.value = "";
         }}
       />
-      {active ? (
-        <div className="flex flex-col gap-3 rounded border border-border bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-border bg-slate-50 text-slate-500">
-              <HiOutlineDocument className="h-6 w-6" />
+      {active && previewFile ? (
+        <div className="w-full max-w-[220px]">
+          <button
+            type="button"
+            className="group relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-border bg-slate-50 text-slate-500 transition hover:border-blue-700"
+            aria-label="Preview shipping label"
+            onClick={() => setPreviewOpen(true)}
+          >
+            {tileURL && isImage ? (
+              <img
+                src={tileURL}
+                alt={active.original_name}
+                className="h-full w-full object-contain"
+              />
+            ) : tileURL && isPdf ? (
+              <iframe
+                src={tileURL}
+                title={active.original_name}
+                className="pointer-events-none h-full w-full bg-white"
+              />
+            ) : (
+              <span className="grid justify-items-center gap-1 px-3">
+                <HiOutlineDocument className="h-8 w-8" />
+                <span className="max-w-full truncate text-xs font-semibold">
+                  PDF label
+                </span>
+              </span>
+            )}
+            <span className="absolute inset-0 hidden items-center justify-center gap-2 bg-slate-950/60 text-white group-hover:flex">
+              <span className="rounded-full bg-white/15 p-2" title="Preview">
+                <HiOutlineEye className="h-4 w-4" />
+              </span>
+              <span
+                className="rounded-full bg-white/15 p-2"
+                title="Replace"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  inputRef.current?.click();
+                }}
+              >
+                <HiOutlineCloudArrowUp className="h-4 w-4" />
+              </span>
             </span>
-            <div className="min-w-0">
-              <p className="truncate font-semibold">{active.original_name}</p>
-              <p className="text-xs text-muted">
-                Version {active.version} / Uploaded{" "}
-                {formatDateTime(active.uploaded_at)}
-              </p>
+          </button>
+          <div className="mt-2 min-w-0">
+            <p className="truncate text-xs font-semibold" title={active.original_name}>
+              {active.original_name}
+            </p>
+            <p className="text-[11px] text-muted">
+              Uploaded {formatDateTime(active.uploaded_at)}
+            </p>
+            <div className="mt-1 flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded p-1 text-muted hover:bg-slate-100"
+                aria-label="Preview shipping label"
+                title="Preview"
+                onClick={() => setPreviewOpen(true)}
+              >
+                <HiOutlineEye className="h-3.5 w-3.5" />
+              </button>
+              <a
+                className={clsx(
+                  "rounded p-1 text-muted hover:bg-slate-100",
+                  !tileURL && "pointer-events-none opacity-40",
+                )}
+                aria-label="Download shipping label"
+                title={tileURL ? "Download" : "File URL is not available"}
+                href={tileURL || "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <HiOutlineArrowDownTray className="h-3.5 w-3.5" />
+              </a>
+              <button
+                type="button"
+                className="rounded p-1 text-muted hover:bg-slate-100"
+                aria-label="Replace shipping label"
+                title="Replace"
+                disabled={upload.isPending}
+                onClick={() => inputRef.current?.click()}
+              >
+                <HiOutlineCloudArrowUp className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => setPreviewOpen(true)}
-            >
-              <HiOutlineEye />
-              Preview
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={() => inputRef.current?.click()}
-            >
-              Replace
-            </Button>
           </div>
         </div>
       ) : (
-        <p className="flex items-center gap-2 text-sm text-amber-700">
-          <HiOutlineExclamationTriangle className="h-4 w-4" />
-          Shipping label required before sending to supplier.
-        </p>
+        <button
+          type="button"
+          className="flex aspect-[4/3] w-full max-w-[220px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-white p-3 text-center text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
+          disabled={upload.isPending}
+          onClick={() => inputRef.current?.click()}
+        >
+          {upload.isPending ? (
+            <Spinner label="Uploading" />
+          ) : (
+            <>
+              <HiOutlineCloudArrowUp className="h-8 w-8" />
+              <span className="text-sm font-semibold">Upload shipping label</span>
+              <span className="text-xs text-muted">PDF, PNG, JPG</span>
+            </>
+          )}
+        </button>
       )}
       {order.shipping_labels && order.shipping_labels.length > 1 ? (
         <ShippingLabelHistory
           labels={order.shipping_labels.filter((label) => !label.is_active)}
         />
       ) : null}
-      {active && previewOpen ? (
+      {active && previewOpen && previewFile ? (
         <FilePreviewModal
-          file={{
-            id: active.id,
-            file_id: active.file_id,
-            file_type: "shipping_label",
-            usage: "shipping_label",
-            sort_order: active.version,
-            is_selected: active.is_active,
-            original_name: active.original_name,
-            mime_type:
-              active.mime_type ||
-              localPreview?.mime ||
-              "application/octet-stream",
-            size: localPreview?.size || active.size,
-            created_at: active.uploaded_at,
-          }}
-          url={active.url || localPreview?.url}
+          file={previewFile}
+          url={tileURL}
           onClose={() => setPreviewOpen(false)}
         />
       ) : null}
@@ -3682,9 +3762,9 @@ export function Info({
   );
 }
 
-function SectionHeading({ title }: { title: string }) {
+function SectionHeading({ title, compact }: { title: string; compact?: boolean }) {
   return (
-    <h3 className="border-b border-border pb-2 text-sm font-bold text-foreground">
+    <h3 className={clsx("text-sm font-bold text-foreground", !compact && "border-b border-border pb-2")}>
       {title}
     </h3>
   );

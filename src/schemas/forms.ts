@@ -14,7 +14,43 @@ export const categorySchema = z.object({
   parent_id: z.string().optional(),
   sort_order: z.coerce.number().int().min(0),
   is_active: z.boolean(),
+  package_length: z.string().optional(),
+  package_width: z.string().optional(),
+  package_height: z.string().optional(),
+  dimension_unit: z.enum(['in', 'cm']).optional(),
+  shipping_cost_min: z.string().optional(),
+  shipping_cost_max: z.string().optional(),
+  shipping_currency: z.string().regex(/^[A-Z]{3}$/, 'Use a three-letter currency code').optional().or(z.literal('')),
   metadataText: z.string(),
+}).superRefine((data, ctx) => {
+  const positive = /^\d+(\.\d+)?$/;
+  (['package_length', 'package_width', 'package_height'] as const).forEach((field) => {
+    const value = data[field]?.trim();
+    if (value && (!positive.test(value) || Number(value) <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Use a number greater than 0' });
+    }
+  });
+  (['shipping_cost_min', 'shipping_cost_max'] as const).forEach((field) => {
+    const value = data[field]?.trim();
+    if (value && (!positive.test(value) || Number(value) < 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: 'Use a non-negative amount' });
+    }
+  });
+  const min = data.shipping_cost_min?.trim();
+  const max = data.shipping_cost_max?.trim();
+  if (min && max && Number(max) < Number(min)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shipping_cost_max'], message: 'Maximum must be greater than or equal to minimum' });
+  }
+});
+
+export const promptSchema = z.object({
+  name: z.string().min(1, 'Prompt name is required'),
+  type: z.enum(['design', 'mockup', 'other']),
+  category_id: z.string().optional(),
+  content: z.string().min(1, 'Prompt content is required'),
+  description: z.string().optional(),
+  tagsText: z.string(),
+  state: z.enum(['active', 'inactive']),
 });
 
 export const statusSchema = z.object({
@@ -72,6 +108,7 @@ export const changePasswordSchema = z
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type CategoryFormValues = z.infer<typeof categorySchema>;
+export type PromptFormValues = z.infer<typeof promptSchema>;
 export type StatusFormValues = z.infer<typeof statusSchema>;
 export type ListingFormValues = z.infer<typeof listingSchema>;
 export type CollaboratorFormValues = z.infer<typeof collaboratorSchema>;

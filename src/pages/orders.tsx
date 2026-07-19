@@ -210,25 +210,28 @@ export function OrderDetailPage() {
         </OrderHeader>
       </div>
 
-      <CompactReadinessBar order={data} />
-
-      <main className="space-y-5">
-        <section className="border-b border-border pb-4">
+      <section className="grid gap-4 rounded-xl border border-border bg-white p-4 shadow-sm xl:grid-cols-[minmax(0,1fr)_220px]">
+        <CompactReadinessBar order={data} className="min-w-0" />
+        <ShippingLabelPanel order={data} onChanged={() => void refresh()} compact />
+        <div className="border-t border-border pt-3 xl:col-span-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="font-bold">Products</h2>
+              <h2 className="text-sm font-bold">Products</h2>
               <p className="text-sm text-muted">{data.products_count} products / {data.items_count} items</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="secondary" onClick={() => setOpenItems(new Set(allItemIds))}>Expand All</Button>
-              <Button type="button" variant="secondary" onClick={() => setOpenItems(new Set())}>Collapse All</Button>
-              <Button type="button" onClick={() => setAddListingOpen(true)}>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set(allItemIds))}>Expand All</Button>
+              <Button type="button" size="sm" variant="secondary" onClick={() => setOpenItems(new Set())}>Collapse All</Button>
+              <Button type="button" size="sm" onClick={() => setAddListingOpen(true)}>
                 <HiOutlinePlus />
                 Add Listing
               </Button>
             </div>
           </div>
-        </section>
+        </div>
+      </section>
+
+      <main className="space-y-4">
           {data.lines?.map((line) => (
             <OrderLineCard
               key={line.id}
@@ -246,7 +249,6 @@ export function OrderDetailPage() {
               <p className="text-sm text-muted">Add a Listing to generate production items.</p>
             </div>
           ) : null}
-        <ShippingLabelPanel order={data} onChanged={() => void refresh()} />
       </main>
 
       <OrderDetailsDrawer order={data} activeTab={drawer} onClose={() => setDrawer(null)} />

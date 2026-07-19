@@ -63,11 +63,18 @@ export type Category = {
   sort_order: number;
   is_active: boolean;
   metadata: Record<string, unknown>;
+  package_length?: string | null;
+  package_width?: string | null;
+  package_height?: string | null;
+  dimension_unit?: 'in' | 'cm' | string | null;
+  shipping_cost_min?: string | null;
+  shipping_cost_max?: string | null;
+  shipping_currency?: string | null;
   created_at: string;
   updated_at: string;
 };
 
-export type CategoryRequest = Partial<Pick<Category, 'name' | 'slug' | 'description' | 'parent_id' | 'sort_order' | 'is_active' | 'metadata'>>;
+export type CategoryRequest = Partial<Pick<Category, 'name' | 'slug' | 'description' | 'parent_id' | 'sort_order' | 'is_active' | 'metadata' | 'package_length' | 'package_width' | 'package_height' | 'dimension_unit' | 'shipping_cost_min' | 'shipping_cost_max' | 'shipping_currency'>>;
 
 export type ListingStatus = {
   id: string;
@@ -267,6 +274,62 @@ export type DesignLibraryBrowse = {
   folders: DesignFolder[];
   assets: DesignAsset[];
   meta: Pagination;
+};
+
+export type PromptType = 'design' | 'mockup' | 'other';
+export type PromptState = 'active' | 'inactive';
+
+export type PromptImage = {
+  id: string;
+  url: string;
+  object_key?: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  alt_text?: string | null;
+  width?: number | null;
+  height?: number | null;
+  relation_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Prompt = {
+  id: string;
+  name: string;
+  type: PromptType;
+  content: string;
+  description?: string | null;
+  category_id?: string | null;
+  category?: CategorySummary | null;
+  tags: string[];
+  state: PromptState;
+  images: PromptImage[];
+  image_count: number;
+  created_by?: { id: string; full_name: string } | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PromptRequest = {
+  name?: string;
+  type?: PromptType;
+  content?: string;
+  description?: string | null;
+  category_id?: string | null;
+  tags?: string[];
+  state?: PromptState;
+  image_ids?: string[];
+};
+
+export type PromptParams = {
+  page?: number;
+  limit?: number;
+  search?: string;
+  type?: PromptType | '';
+  category_id?: string;
+  state?: PromptState | '';
+  sort?: 'newest' | 'oldest' | 'name_asc' | 'name_desc' | 'updated' | string;
 };
 
 export type DesignLibraryParams = {

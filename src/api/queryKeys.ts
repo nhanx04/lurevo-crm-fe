@@ -10,6 +10,11 @@ export const queryKeys = {
     list: (params?: object) => ['listing-statuses', params] as const,
     detail: (id: string) => ['listing-statuses', id] as const,
   },
+  prompts: {
+    list: (params?: object) => ['prompts', params] as const,
+    detail: (id: string) => ['prompts', id] as const,
+    images: (params?: object) => ['prompt-images', params] as const,
+  },
   listings: {
     list: (params?: object) => ['listings', params] as const,
     detail: (id: string) => ['listings', id] as const,
