@@ -1810,13 +1810,15 @@ export function WorkflowActionBar({
   const secondaryDirect = directActions.filter((action) => !transitionByAction.get(action)?.primary);
   const renderTransitionButton = (transition?: WorkflowActionState) => {
     if (!transition) return null;
+    const disabledReason = transition.action === "mark_ready"
+      ? "Main design is required before marking this order as ready."
+      : transition.disabled_reason;
     const button = (
       <Button
         key={transition.action}
         type="button"
         variant={transition.primary ? "primary" : "secondary"}
         disabled={workflow.isPending || transition.disabled}
-        aria-describedby={transition.disabled ? `${transition.action}-disabled-reason` : undefined}
         onClick={() =>
           transition.action === "cancel"
             ? setCancelOpen(true)
@@ -1827,7 +1829,7 @@ export function WorkflowActionBar({
       </Button>
     );
     return transition.disabled ? (
-      <span key={transition.action} className="inline-flex" title={transition.disabled_reason}>
+      <span key={transition.action} className="inline-flex" title={disabledReason} tabIndex={0} aria-label={disabledReason}>
         {button}
       </span>
     ) : button;
@@ -1855,11 +1857,6 @@ export function WorkflowActionBar({
         ) : null}
         {primaryDirect.map((action) => renderTransitionButton(transitionByAction.get(action)))}
       </div>
-      {transitions.some((transition) => transition.disabled) ? (
-        <p id={`${transitions.find((transition) => transition.disabled)?.action}-disabled-reason`} className="w-full text-xs text-amber-700">
-          {transitions.find((transition) => transition.disabled)?.disabled_reason}
-        </p>
-      ) : null}
       {confirmTransition ? (
         <TransitionConfirmDialog
           order={order}
@@ -2280,8 +2277,11 @@ export function CompactReadinessBar({ order, className }: { order: Order; classN
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   const visibleChecks = expanded ? checks : checks.slice(0, 5);
+  const rootClass = className === "contents"
+    ? "contents"
+    : clsx("grid min-w-0 gap-4 md:grid-cols-[minmax(320px,1fr)_150px] md:items-center", className);
   return (
-    <section className={clsx("grid min-w-0 gap-4 md:grid-cols-[minmax(260px,1fr)_140px] md:items-center", className)}>
+    <section className={rootClass}>
       <div className="min-w-0">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-bold">Order readiness</h2>
@@ -3648,7 +3648,7 @@ export function ShippingLabelPanel({
         }}
       />
       {active && previewFile ? (
-        <div className="w-full max-w-[170px]">
+        <div className="w-full max-w-[150px]">
           <button
             type="button"
             className="group relative aspect-[2/3] w-full overflow-hidden rounded-lg border border-border bg-slate-50 text-slate-500 transition hover:border-blue-700"
@@ -3662,12 +3662,7 @@ export function ShippingLabelPanel({
                 className="h-full w-full object-contain"
               />
             ) : tileURL && isPdf ? (
-              <span className="grid h-full w-full place-items-center bg-white px-3 text-center">
-                <span className="grid justify-items-center gap-2">
-                  <HiOutlineDocument className="h-10 w-10" />
-                  <span className="max-w-full truncate text-xs font-semibold">PDF label</span>
-                </span>
-              </span>
+              <ShippingLabelDocumentPreview name={active.original_name} />
             ) : (
               <span className="grid justify-items-center gap-1 px-3">
                 <HiOutlineDocument className="h-8 w-8" />
@@ -3738,7 +3733,7 @@ export function ShippingLabelPanel({
       ) : (
         <button
           type="button"
-          className="flex aspect-[2/3] w-full max-w-[170px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-white p-3 text-center text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
+          className="flex aspect-[2/3] w-full max-w-[150px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 bg-white p-3 text-center text-slate-500 transition hover:border-blue-700 hover:text-blue-700"
           disabled={upload.isPending}
           onClick={() => inputRef.current?.click()}
         >
@@ -3766,6 +3761,38 @@ export function ShippingLabelPanel({
         />
       ) : null}
     </section>
+  );
+}
+
+function ShippingLabelDocumentPreview({ name }: { name: string }) {
+  return (
+    <span className="flex h-full w-full items-center justify-center bg-slate-100 p-2">
+      <span className="grid h-full w-full content-start gap-2 rounded border border-slate-200 bg-white p-2 text-left shadow-sm">
+        <span className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
+          <span className="text-[9px] font-bold uppercase text-slate-500">Shipping Label</span>
+          <span className="rounded bg-red-50 px-1 text-[9px] font-bold text-red-600">PDF</span>
+        </span>
+        <span className="grid gap-1">
+          <span className="h-2 w-3/4 rounded bg-slate-300" />
+          <span className="h-1.5 w-full rounded bg-slate-200" />
+          <span className="h-1.5 w-5/6 rounded bg-slate-200" />
+        </span>
+        <span className="grid grid-cols-[1fr_28px] gap-2">
+          <span className="grid gap-1">
+            <span className="h-1.5 rounded bg-slate-200" />
+            <span className="h-1.5 rounded bg-slate-200" />
+            <span className="h-1.5 w-2/3 rounded bg-slate-200" />
+          </span>
+          <span className="rounded border border-slate-200 bg-slate-50" />
+        </span>
+        <span className="mt-auto grid grid-cols-8 items-end gap-0.5">
+          {[8, 14, 10, 18, 9, 15, 11, 17].map((height, index) => (
+            <span key={`${height}-${index}`} className="w-full bg-slate-700" style={{ height }} />
+          ))}
+        </span>
+        <span className="truncate text-[9px] font-semibold text-slate-500" title={name}>{name}</span>
+      </span>
+    </span>
   );
 }
 

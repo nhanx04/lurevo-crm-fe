@@ -188,8 +188,8 @@ export function missingReadinessMessages(order: Order) {
 }
 
 export function readinessDisabledReason(missing: string[]) {
-  if (!missing.length) return "Complete all readiness checks before continuing.";
-  return `Complete ${missing[0].toLowerCase()}${missing.length > 1 ? ` and ${missing.length - 1} more requirement${missing.length > 2 ? "s" : ""}` : ""} before continuing.`;
+  if (!missing.length) return "Resolve readiness requirements before continuing.";
+  return `Resolve ${missing[0].toLowerCase()}${missing.length > 1 ? ` and ${missing.length - 1} more requirement${missing.length > 2 ? "s" : ""}` : ""} before continuing.`;
 }
 
 export function fileToMetadata(file: File, scope: string): FileMetadataRequest {
